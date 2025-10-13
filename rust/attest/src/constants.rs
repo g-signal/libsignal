@@ -12,7 +12,7 @@ use crate::util::SmallMap;
 pub const ENCLAVE_ID_CDSI_STAGING: &[u8] =
     &hex!("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05");
 pub const ENCLAVE_ID_CDSI_PROD: &[u8] =
-    &hex!("ee9503070127120074612b6688e593b67e486b1541449f54d71e387484eb40a3");
+    &hex!("a1bc651354e220714c84d6016310334c4bfe5605b1c7608bd030258d5094806d");
 
 pub const ENCLAVE_ID_SVR2_STAGING_PREQUANTUM: &[u8] =
     &hex!("38e01eff4fe357dc0b0e8ef7a44b4abc5489fbccba3a78780f3872c277f62bf3");
@@ -27,7 +27,7 @@ pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
 pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
     &hex!("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036");
 pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
-    &hex!("29cd63c87bea751e3bfd0fbd401279192e2e5c99948b4ee9437eafc4968355fb");
+    &hex!("3a831fff345a9c2d67416752fc2dec09bac8768e602da7a156121b00a970cb43");
 
 pub const ENCLAVE_ID_SVRB_STAGING: &[u8] =
     &hex!("fefd012f3792a5ffd7d385171431adcde938ccb1346d1e1d9d2635da9c44da99");
@@ -130,10 +130,10 @@ pub const RAFT_CONFIG_SVR2_STAGING: &RaftConfig = &RaftConfig {
 };
 
 pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 4,
-    max_voting_replicas: 13,
+    min_voting_replicas: 3,
+    max_voting_replicas: 9,
     super_majority: 2,
-    group_id: 10263621230883829694,
+    group_id: 9161153614836317716,
     db_version: 2,
     attestation_timeout: 604800,
     simulated: false,
