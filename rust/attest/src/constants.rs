@@ -27,7 +27,7 @@ pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
 pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
     &hex!("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036");
 pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
-    &hex!("3a831fff345a9c2d67416752fc2dec09bac8768e602da7a156121b00a970cb43");
+    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
 
 pub const ENCLAVE_ID_SVRB_STAGING: &[u8] =
     &hex!("fefd012f3792a5ffd7d385171431adcde938ccb1346d1e1d9d2635da9c44da99");
@@ -130,7 +130,7 @@ pub const RAFT_CONFIG_SVR2_STAGING: &RaftConfig = &RaftConfig {
 };
 
 pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
-    min_voting_replicas: 3,
+    min_voting_replicas: 1,
     max_voting_replicas: 9,
     super_majority: 2,
     group_id: 9161153614836317716,
