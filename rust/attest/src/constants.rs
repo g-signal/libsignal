@@ -10,9 +10,9 @@ use crate::svr2::RaftConfig;
 use crate::util::SmallMap;
 
 pub const ENCLAVE_ID_CDSI_STAGING: &[u8] =
-    &hex!("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05");
-pub const ENCLAVE_ID_CDSI_PROD: &[u8] =
     &hex!("a1bc651354e220714c84d6016310334c4bfe5605b1c7608bd030258d5094806d");
+pub const ENCLAVE_ID_CDSI_PROD: &[u8] =
+    &hex!("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05");
 
 pub const ENCLAVE_ID_SVR2_STAGING_PREQUANTUM: &[u8] =
     &hex!("38e01eff4fe357dc0b0e8ef7a44b4abc5489fbccba3a78780f3872c277f62bf3");
@@ -25,7 +25,7 @@ pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
     &hex!("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6");
 
 pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
-    &hex!("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036");
+    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
 pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
     &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
 
