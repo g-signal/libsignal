@@ -41,7 +41,7 @@ const DOMAIN_CONFIG_CHAT: DomainConfig = DomainConfig {
     ip_v4: &[],
     ip_v6: &[],
     connect: ConnectionConfig {
-        hostname: "chat.imba-test.com",
+        hostname: "chat.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -63,7 +63,7 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
         ip_addr!(v6, "2600:9000:a61f:527c:2215:cd9:bac6:a2f8"),
     ],
     connect: ConnectionConfig {
-        hostname: "chat.staging.signal.org",
+        hostname: "chat.imba-test.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
