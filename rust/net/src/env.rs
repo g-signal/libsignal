@@ -77,7 +77,7 @@ const DOMAIN_CONFIG_CHAT_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_CDSI: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "cdsi.imba-test.com",
+        hostname: "cdsi.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -93,7 +93,7 @@ const DOMAIN_CONFIG_CDSI: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "cdsi.staging.signal.org",
+        hostname: "cdsi.imba-test.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -109,7 +109,7 @@ const DOMAIN_CONFIG_CDSI_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "svr2.imba-test.com",
+        hostname: "svr2.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -125,7 +125,7 @@ const DOMAIN_CONFIG_SVR2: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "svr2.staging.signal.org",
+        hostname: "svr2.imba-test.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
