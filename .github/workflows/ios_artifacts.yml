@@ -1,6 +1,9 @@
 name: Build iOS Artifacts
 
 on:
+  push:
+    tags:
+      - 'v*'  # 当推送v开头的tag时自动触发
   workflow_dispatch:
     inputs:
       dry_run:
@@ -52,7 +55,17 @@ jobs:
 
     - run: rustup toolchain install $(cat rust-toolchain) --profile minimal --target x86_64-apple-ios,aarch64-apple-ios,aarch64-apple-ios-sim --component rust-src
 
-    - run: brew install protobuf
+    - run: brew install protobuf cmake go perl
+
+    # 设置构建环境变量
+    - name: Set build environment
+      run: |
+        echo "IPHONEOS_DEPLOYMENT_TARGET=12.0" >> $GITHUB_ENV
+        echo "DEVELOPER_DIR=$(xcode-select -p)" >> $GITHUB_ENV
+
+    # 清理构建缓存
+    - name: Clean build cache
+      run: cargo clean
 
     - name: Build for x86_64-apple-ios
       run: swift/build_ffi.sh --release
