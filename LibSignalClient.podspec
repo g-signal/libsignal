@@ -5,13 +5,13 @@
 
 Pod::Spec.new do |s|
   s.name             = 'LibSignalClient'
-  s.version          = '0.76.7'
+  s.version          = '0.76.7-BA'
   s.summary          = 'A Swift wrapper library for communicating with the Signal messaging service.'
 
-  s.homepage         = 'https://github.com/signalapp/libsignal'
+  s.homepage         = 'https://github.com/g-signal/libsignal'
   s.license          = 'AGPL-3.0-only'
   s.author           = 'Signal Messenger LLC'
-  s.source           = { :git => 'https://github.com/signalapp/libsignal.git', :tag => "v#{s.version}" }
+  s.source           = { :git => 'https://github.com/g-signal/libsignal.git', :tag => "v#{s.version}" }
 
   s.swift_version    = '5'
   s.platform         = :ios, '15.0'
@@ -71,7 +71,7 @@ Pod::Spec.new do |s|
           # Local development
           exit 0
         fi
-        "${PODS_TARGET_SRCROOT}"/bin/fetch_archive.py -u "https://build-artifacts.signal.org/libraries/${LIBSIGNAL_FFI_PREBUILD_ARCHIVE}" -c "${LIBSIGNAL_FFI_PREBUILD_CHECKSUM}" -o "${USER_LIBRARY_DIR}/Caches/org.signal.libsignal"
+        "${PODS_TARGET_SRCROOT}"/bin/fetch_archive.py -u "https://github.com/g-signal/libsignal/releases/download/v#{s.version}/${LIBSIGNAL_FFI_PREBUILD_ARCHIVE}" -c "${LIBSIGNAL_FFI_PREBUILD_CHECKSUM}" -o "${USER_LIBRARY_DIR}/Caches/org.signal.libsignal"
       ),
     },
     { name: 'Extract libsignal-ffi prebuild',
