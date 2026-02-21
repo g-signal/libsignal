@@ -1,0 +1,113 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will build a package using Gradle and then publish it to GitHub packages when a release is created
+# For more information see: https://github.com/actions/setup-java/blob/main/docs/advanced-usage.md#Publishing-using-gradle
+
+name: Build Android Artifacts
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      gradle_tasks:
+        description: "Gradle tasks to run"
+        required: false
+        default: ":libsignal-android:assembleRelease"
+      publish:
+        description: "Also publish (requires publishing config + secrets)"
+        required: false
+        default: "false"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    env:
+      # 让 CI 更稳定一些
+      CI: true
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx4g"
+      # 如需固定 NDK，可改这里（也可以删掉，让 Gradle 自己下载/使用）
+      ANDROID_NDK_VERSION: "26.1.10909125"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+
+      # ---- Rust toolchain (libsignal Android JNI 通常需要) ----
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      # ---- Android SDK / NDK ----
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components (platform + build-tools + NDK)
+        shell: bash
+        run: |
+          sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "ndk;${ANDROID_NDK_VERSION}"
+
+      # 可选：如果项目里需要 CMake/ndk-build
+      - name: Install CMake (optional)
+        shell: bash
+        run: |
+          sdkmanager "cmake;3.22.1" || true
+
+      # ---- Build ----
+      # 建议用明确的 task：assembleRelease / assembleDebug / :module:assembleRelease
+      - name: Build Android AAR
+        run: |
+          TASKS="${{ github.event.inputs.gradle_tasks }}"
+          if [ -z "$TASKS" ]; then
+            # release 触发时用默认
+            TASKS=":libsignal-android:assembleRelease"
+          fi
+          echo "Running Gradle tasks: $TASKS"
+          ./gradlew --stacktrace --no-daemon $TASKS
+
+      # ---- Upload artifacts (把 AAR 从 Actions 下载出来) ----
+      - name: Upload AAR artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aar
+          path: |
+            **/build/outputs/aar/*.aar
+          if-no-files-found: error
+
+      # ---- Publish (可选) ----
+      # 只在 release created 或 手动输入 publish=true 时执行 publish
+      - name: Publish to GitHub Packages
+        run: ./gradlew --stacktrace --no-daemon publish
+        if: |
+          (github.event_name == 'release') ||
+          (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+        env:
+          # GitHub Packages 发布通常用 GITHUB_TOKEN 足够；如你 build.gradle 用了自定义变量，可在这里补
+          USERNAME: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
