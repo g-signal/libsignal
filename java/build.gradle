@@ -17,7 +17,7 @@ plugins {
 
 allprojects {
     version = "0.76.7"
-    group   = "org.signal"
+    group   = "com.ba-chat.lib"
 
     tasks.withType(KotlinCompile).configureEach {
         compilerOptions.jvmTarget = JvmTarget.JVM_17
