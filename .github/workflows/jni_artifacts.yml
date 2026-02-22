@@ -198,7 +198,6 @@ jobs:
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
           ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-          # 这里可以不再直接传 signingKey（避免多行 env），也可以留着作兜底
-          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+
         run: |
-          make publish_java SIGNING_KEY_FILE="$(pwd)/signingkey.asc"
+          make -f java/Makefile publish_java SIGNING_KEY_FILE="$(pwd)/signingkey.asc"
