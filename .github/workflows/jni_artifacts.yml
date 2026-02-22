@@ -53,6 +53,29 @@ jobs:
           else
             echo "SIGNING_KEY is SET"
           fi
+      - name: Prepare signing key file
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          # 如果 secret 里包含字面量 \n（转义形式），用 %b 还原；否则按原样写入
+          if printf "%s" "$SIGNING_KEY" | grep -q '\\n'; then
+            echo "Detected literal \\n; restoring newlines"
+            printf "%b" "$SIGNING_KEY" > signingkey.asc
+          else
+            echo "Key seems multiline already; writing as-is"
+            printf "%s" "$SIGNING_KEY" > signingkey.asc
+          fi
+
+          # 清掉 CR（避免 Windows CRLF）
+          tr -d '\r' < signingkey.asc > signingkey.clean.asc
+          mv signingkey.clean.asc signingkey.asc
+
+          # 安全校验：不打印内容，只输出结构判断
+          echo "key_bytes=$(wc -c < signingkey.asc)"
+          echo "key_lines=$(wc -l < signingkey.asc)"
+          grep -q "BEGIN PGP PRIVATE KEY BLOCK" signingkey.asc && echo "has_BEGIN=yes" || echo "has_BEGIN=no"
+          grep -q "END PGP PRIVATE KEY BLOCK" signingkey.asc && echo "has_END=yes" || echo "has_END=no"43e2
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           submodules: recursive
