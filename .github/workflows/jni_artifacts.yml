@@ -44,6 +44,9 @@ jobs:
           echo "KEYID length: ${#SIGNING_KEYID}"
           echo "PASSWORD length: ${#SIGNING_PASSWORD}"
           echo "KEY length: ${#SIGNING_KEY}"
+          echo "key length: ${#SIGNING_KEY}"
+          echo "first line:"
+          printf "%s" "$SIGNING_KEY" | head -n 1
 
           if [ -z "$SIGNING_KEY" ]; then
             echo "SIGNING_KEY is EMPTY"
