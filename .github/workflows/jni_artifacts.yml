@@ -34,48 +34,6 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Debug signing secrets
-        shell: bash
-        env:
-          SIGNING_KEYID: ${{ secrets.SIGNING_KEYID }}
-          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          echo "KEYID length: ${#SIGNING_KEYID}"
-          echo "PASSWORD length: ${#SIGNING_PASSWORD}"
-          echo "KEY length: ${#SIGNING_KEY}"
-          echo "key length: ${#SIGNING_KEY}"
-          echo "first line:"
-          printf "%s" "$SIGNING_KEY" | head -n 1
-
-          if [ -z "$SIGNING_KEY" ]; then
-            echo "SIGNING_KEY is EMPTY"
-          else
-            echo "SIGNING_KEY is SET"
-          fi
-      - name: Prepare signing key file
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          # 如果 secret 里包含字面量 \n（转义形式），用 %b 还原；否则按原样写入
-          if printf "%s" "$SIGNING_KEY" | grep -q '\\n'; then
-            echo "Detected literal \\n; restoring newlines"
-            printf "%b" "$SIGNING_KEY" > signingkey.asc
-          else
-            echo "Key seems multiline already; writing as-is"
-            printf "%s" "$SIGNING_KEY" > signingkey.asc
-          fi
-
-          # 清掉 CR（避免 Windows CRLF）
-          tr -d '\r' < signingkey.asc > signingkey.clean.asc
-          mv signingkey.clean.asc signingkey.asc
-
-          # 安全校验：不打印内容，只输出结构判断
-          echo "key_bytes=$(wc -c < signingkey.asc)"
-          echo "key_lines=$(wc -l < signingkey.asc)"
-          grep -q "BEGIN PGP PRIVATE KEY BLOCK" signingkey.asc && echo "has_BEGIN=yes" || echo "has_BEGIN=no"
-          grep -q "END PGP PRIVATE KEY BLOCK" signingkey.asc && echo "has_END=yes" || echo "has_END=no"43e2
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           submodules: recursive
@@ -220,13 +178,27 @@ jobs:
           name: libsignal-server
           path: java/server/build/libs/libsignal-server-*.jar
 
-      - run: make publish_java
-        if: ${{ github.ref_type == 'tag' }}
-        working-directory: java
+      - name: Prepare signing key file
+        shell: bash
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          if printf "%s" "$SIGNING_KEY" | grep -q '\\n'; then
+            printf "%b" "$SIGNING_KEY" > signingkey.asc
+          else
+            printf "%s" "$SIGNING_KEY" > signingkey.asc
+          fi
+          tr -d '\r' < signingkey.asc > signingkey.clean.asc
+          mv signingkey.clean.asc signingkey.asc
+          echo "key_lines=$(wc -l < signingkey.asc)"
+      - name: Publish
+        shell: bash
         env:
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
           ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-          # ASCII-armored PGP secret key
+          # 这里可以不再直接传 signingKey（避免多行 env），也可以留着作兜底
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+        run: |
+          make publish_java SIGNING_KEY_FILE="$(pwd)/signingkey.asc"
