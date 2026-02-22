@@ -34,6 +34,22 @@ jobs:
     timeout-minutes: 45
 
     steps:
+      - name: Debug signing secrets
+        shell: bash
+        env:
+          SIGNING_KEYID: ${{ secrets.SIGNING_KEYID }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+        run: |
+          echo "KEYID length: ${#SIGNING_KEYID}"
+          echo "PASSWORD length: ${#SIGNING_PASSWORD}"
+          echo "KEY length: ${#SIGNING_KEY}"
+
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "SIGNING_KEY is EMPTY"
+          else
+            echo "SIGNING_KEY is SET"
+          fi
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
           submodules: recursive
