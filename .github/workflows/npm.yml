@@ -1,6 +1,9 @@
 name: Publish to NPM
 
 on:
+  push:
+    tags:
+      - 'v*'  # 当推送 v 开头的 tag 时自动触发
   workflow_dispatch:
     inputs:
       dry_run:
