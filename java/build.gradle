@@ -17,7 +17,7 @@ plugins {
 
 allprojects {
     version = "0.76.7"
-    group   = "com.ba-chat.lib"
+    group   = "io.github.wanggenlin"
 
     tasks.withType(KotlinCompile).configureEach {
         compilerOptions.jvmTarget = JvmTarget.JVM_17
