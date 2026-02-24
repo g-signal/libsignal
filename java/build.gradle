@@ -121,9 +121,49 @@ ext.setUpSigningKey = { signingExt ->
     def signingKeyId = findProperty("signingKeyId")
     def signingKey = findProperty("signingKey")
     def signingPassword = findProperty("signingPassword")
-    if (signingKeyId && signingKey && signingPassword) {
-        signingExt.useInMemoryPgpKeys(signingKeyId.trim(), signingKey.trim(), signingPassword.trim())
+
+    // 诊断日志
+    println "========== PGP Signing Configuration Diagnostics =========="
+    println "signingKeyId present: ${signingKeyId != null}"
+    println "signingKey present: ${signingKey != null}"
+    println "signingPassword present: ${signingPassword != null}"
+
+    if (signingKeyId) {
+        println "signingKeyId length: ${signingKeyId.length()}"
+        println "signingKeyId (trimmed): '${signingKeyId.trim()}'"
     }
+
+    if (signingKey) {
+        def keyTrimmed = signingKey.trim()
+        println "signingKey length: ${signingKey.length()}"
+        println "signingKey length (trimmed): ${keyTrimmed.length()}"
+        println "signingKey starts with: '${keyTrimmed.take(50)}'"
+        println "signingKey ends with: '${keyTrimmed.reverse().take(50).reverse()}'"
+        println "signingKey has BEGIN marker: ${keyTrimmed.contains('BEGIN PGP PRIVATE KEY BLOCK')}"
+        println "signingKey has END marker: ${keyTrimmed.contains('END PGP PRIVATE KEY BLOCK')}"
+        println "signingKey line count: ${keyTrimmed.count('\n') + 1}"
+    }
+
+    if (signingPassword) {
+        println "signingPassword length: ${signingPassword.length()}"
+    }
+
+    if (signingKeyId && signingKey && signingPassword) {
+        println "Attempting to configure PGP signing..."
+        try {
+            signingExt.useInMemoryPgpKeys(signingKeyId.trim(), signingKey.trim(), signingPassword.trim())
+            println "✓ PGP signing configured successfully"
+        } catch (Exception e) {
+            println "✗ FAILED to configure PGP signing"
+            println "Error type: ${e.class.name}"
+            println "Error message: ${e.message}"
+            e.printStackTrace()
+            throw e
+        }
+    } else {
+        println "⚠ Skipping PGP signing configuration (missing credentials)"
+    }
+    println "==========================================================="
 }
 
 nexusPublishing {

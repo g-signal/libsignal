@@ -153,9 +153,42 @@ jobs:
           pattern: libsignal-server*
           merge-multiple: true
 
-      - run: make
+      - name: Restore PGP key for dry run
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        shell: bash
+        run: |
+            echo "${{ secrets.SIGNING_KEY_B64 }}" | base64 -d > private.asc
+            # 去掉 Windows CRLF（\r）
+            sed -i 's/\r$//' private.asc
+            # 验证文件大小
+            ls -lh private.asc
+            # 验证头尾，确认格式正确
+            echo "First line:"
+            head -n 1 private.asc
+            echo "Last line:"
+            tail -n 1 private.asc
+            # 验证是否是有效的 PGP key
+            if ! grep -q "BEGIN PGP PRIVATE KEY BLOCK" private.asc; then
+              echo "ERROR: Invalid PGP key format - missing BEGIN marker"
+              exit 1
+            fi
+            if ! grep -q "END PGP PRIVATE KEY BLOCK" private.asc; then
+              echo "ERROR: Invalid PGP key format - missing END marker"
+              exit 1
+            fi
+
+      - name: Build and sign (dry run)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
         working-directory: java
+        shell: bash
+        run: |
+          export ORG_GRADLE_PROJECT_signingKey="$(cat ../private.asc)"
+          make test_signing
+        env:
+          ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
+          ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
+          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
 
       - name: Upload libsignal-android
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
@@ -178,23 +211,43 @@ jobs:
           name: libsignal-server
           path: java/server/build/libs/libsignal-server-*.jar
 
-      - name: Restore PGP key
-        if: ${{ github.ref_type == 'tag' }}
+      - name: Restore PGP key for publishing
+        if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
         shell: bash
         run: |
             echo "${{ secrets.SIGNING_KEY_B64 }}" | base64 -d > private.asc
             # 去掉 Windows CRLF（\r）
             sed -i 's/\r$//' private.asc
-            # 只校验头尾，不泄露内容
+            # 验证文件大小
+            ls -lh private.asc
+            # 验证头尾，确认格式正确
+            echo "First line:"
             head -n 1 private.asc
+            echo "Last line:"
             tail -n 1 private.asc
+            # 验证是否是有效的 PGP key
+            if ! grep -q "BEGIN PGP PRIVATE KEY BLOCK" private.asc; then
+              echo "ERROR: Invalid PGP key format - missing BEGIN marker"
+              exit 1
+            fi
+            if ! grep -q "END PGP PRIVATE KEY BLOCK" private.asc; then
+              echo "ERROR: Invalid PGP key format - missing END marker"
+              exit 1
+            fi
 
-      - name: Publish
-        if: ${{ github.ref_type == 'tag' }}
+      - name: Publish to Maven Central
+        if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && !inputs.dry_run) }}
         working-directory: java
         shell: bash
         run: |
           export ORG_GRADLE_PROJECT_signingKey="$(cat ../private.asc)"
+          echo "========================================="
+          if [ "${{ github.ref_type }}" == "tag" ]; then
+            echo "Publishing from tag: ${{ github.ref_name }}"
+          else
+            echo "Publishing from manual workflow trigger"
+          fi
+          echo "========================================="
           make publish_java
         env:
                 ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
