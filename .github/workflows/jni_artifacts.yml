@@ -178,13 +178,26 @@ jobs:
           name: libsignal-server
           path: java/server/build/libs/libsignal-server-*.jar
 
-      - run: make publish_java
+      - name: Restore PGP key
+        if: ${{ github.ref_type == 'tag' }}
+        shell: bash
+        run: |
+            echo "${{ secrets.SIGNING_KEY_B64 }}" | base64 -d > private.asc
+            # 去掉 Windows CRLF（\r）
+            sed -i 's/\r$//' private.asc
+            # 只校验头尾，不泄露内容
+            head -n 1 private.asc
+            tail -n 1 private.asc
+
+      - name: Publish
         if: ${{ github.ref_type == 'tag' }}
         working-directory: java
+        shell: bash
+        run: |
+          export ORG_GRADLE_PROJECT_signingKey="$(cat ../private.asc)"
+          make publish_java
         env:
-          ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
-          ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
-          ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-          # ASCII-armored PGP secret key
-          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
+                ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
+                ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
+                ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
+                ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
