@@ -11,7 +11,7 @@ default: java_build
 
 DOCKER_IMAGE := libsignal-builder
 DOCKER_TTY_FLAG := $$(test -t 0 && echo -it)
-GRADLE_OPTIONS ?= --dependency-verification strict
+GRADLE_OPTIONS ?= --dependency-verification strict --stacktrace
 CROSS_COMPILE_SERVER ?= -PcrossCompileServer
 
 docker_image:
