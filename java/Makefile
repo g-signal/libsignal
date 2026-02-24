@@ -27,6 +27,20 @@ java_build: docker_image
 
 publish_java: DOCKER_EXTRA = $(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 publish_java: docker_image
+	@echo "========================================="
+	@echo "Publishing Configuration Diagnostics"
+	@echo "========================================="
+	@echo "Sonatype Username: $${ORG_GRADLE_PROJECT_sonatypeUsername:-<not set>}"
+	@echo "Sonatype Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_sonatypePassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_sonatypePassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key ID: $${ORG_GRADLE_PROJECT_signingKeyId:-<not set>}"
+	@echo "Signing Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingPassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_signingPassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingKey" ]; then \
+		KEY_LEN=$${#ORG_GRADLE_PROJECT_signingKey}; \
+		KEY_START=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | head -c 50); \
+		KEY_END=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | tail -c 50); \
+		echo "<set, length=$$KEY_LEN, starts with: $$KEY_START..., ends with: ...$$KEY_END>"; \
+	else echo "<not set>"; fi)"
+	@echo "========================================="
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
 		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
 		-e ORG_GRADLE_PROJECT_sonatypeUsername \
@@ -39,6 +53,20 @@ publish_java: docker_image
 
 test_signing: DOCKER_EXTRA = $(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 test_signing: docker_image
+	@echo "========================================="
+	@echo "Test Signing Configuration Diagnostics"
+	@echo "========================================="
+	@echo "Sonatype Username: $${ORG_GRADLE_PROJECT_sonatypeUsername:-<not set>}"
+	@echo "Sonatype Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_sonatypePassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_sonatypePassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key ID: $${ORG_GRADLE_PROJECT_signingKeyId:-<not set>}"
+	@echo "Signing Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingPassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_signingPassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingKey" ]; then \
+		KEY_LEN=$${#ORG_GRADLE_PROJECT_signingKey}; \
+		KEY_START=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | head -c 50); \
+		KEY_END=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | tail -c 50); \
+		echo "<set, length=$$KEY_LEN, starts with: $$KEY_START..., ends with: ...$$KEY_END>"; \
+	else echo "<not set>"; fi)"
+	@echo "========================================="
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
 		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
 		-e ORG_GRADLE_PROJECT_sonatypeUsername \
