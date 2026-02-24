@@ -178,26 +178,13 @@ jobs:
           name: libsignal-server
           path: java/server/build/libs/libsignal-server-*.jar
 
-      - name: Prepare signing key file
-        shell: bash
-        env:
-          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
-        run: |
-          if printf "%s" "$SIGNING_KEY" | grep -q '\\n'; then
-            printf "%b" "$SIGNING_KEY" > signingkey.asc
-          else
-            printf "%s" "$SIGNING_KEY" > signingkey.asc
-          fi
-          tr -d '\r' < signingkey.asc > signingkey.clean.asc
-          mv signingkey.clean.asc signingkey.asc
-          echo "key_lines=$(wc -l < signingkey.asc)"
-      - name: Publish
-        shell: bash
+      - run: make publish_java
+        if: ${{ github.ref_type == 'tag' }}
+        working-directory: java
         env:
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
           ORG_GRADLE_PROJECT_signingKeyId: ${{ secrets.SIGNING_KEYID }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.SIGNING_PASSWORD }}
-
-        run: |
-          make -f java/Makefile publish_java SIGNING_KEY_FILE="$(pwd)/signingkey.asc"
+          # ASCII-armored PGP secret key
+          ORG_GRADLE_PROJECT_signingKey: ${{ secrets.SIGNING_KEY }}
