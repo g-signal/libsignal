@@ -65,7 +65,7 @@ Pod::Spec.new do |s|
       # but I wouldn't want to risk a mismatched archive giving us cryptic errors at link or run
       # time later. This Is Fine.
       always_out_of_date: '1',
-      script: %q(
+      script: %(
         set -euo pipefail
         if [ -e "${PODS_TARGET_SRCROOT}/swift/build_ffi.sh" ]; then
           # Local development
