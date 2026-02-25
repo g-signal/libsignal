@@ -11,7 +11,8 @@
 
 *.orig
 *.rej
-
+*.so
+/java/android/src/main/testJniLib/*
 *~
 \#*\#
 .\#*

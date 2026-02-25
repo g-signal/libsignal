@@ -5,13 +5,13 @@
 
 DOCKER ?= docker
 
-.PHONY: docker java_build publish_java
+.PHONY: docker java_build publish_java test_signing
 
 default: java_build
 
 DOCKER_IMAGE := libsignal-builder
 DOCKER_TTY_FLAG := $$(test -t 0 && echo -it)
-GRADLE_OPTIONS ?= --dependency-verification strict
+GRADLE_OPTIONS ?= --dependency-verification strict --stacktrace
 CROSS_COMPILE_SERVER ?= -PcrossCompileServer
 
 docker_image:
@@ -27,6 +27,20 @@ java_build: docker_image
 
 publish_java: DOCKER_EXTRA = $(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 publish_java: docker_image
+	@echo "========================================="
+	@echo "Publishing Configuration Diagnostics"
+	@echo "========================================="
+	@echo "Sonatype Username: $${ORG_GRADLE_PROJECT_sonatypeUsername:-<not set>}"
+	@echo "Sonatype Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_sonatypePassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_sonatypePassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key ID: $${ORG_GRADLE_PROJECT_signingKeyId:-<not set>}"
+	@echo "Signing Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingPassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_signingPassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingKey" ]; then \
+		KEY_LEN=$${#ORG_GRADLE_PROJECT_signingKey}; \
+		KEY_START=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | head -c 50); \
+		KEY_END=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | tail -c 50); \
+		echo "<set, length=$$KEY_LEN, starts with: $$KEY_START..., ends with: ...$$KEY_END>"; \
+	else echo "<not set>"; fi)"
+	@echo "========================================="
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
 		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
 		-e ORG_GRADLE_PROJECT_sonatypeUsername \
@@ -36,6 +50,32 @@ publish_java: docker_image
 		-e ORG_GRADLE_PROJECT_signingKey \
 		$(DOCKER_IMAGE) \
 		sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) publish closeAndReleaseStagingRepositories $(CROSS_COMPILE_SERVER)"
+
+test_signing: DOCKER_EXTRA = $(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
+test_signing: docker_image
+	@echo "========================================="
+	@echo "Test Signing Configuration Diagnostics"
+	@echo "========================================="
+	@echo "Sonatype Username: $${ORG_GRADLE_PROJECT_sonatypeUsername:-<not set>}"
+	@echo "Sonatype Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_sonatypePassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_sonatypePassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key ID: $${ORG_GRADLE_PROJECT_signingKeyId:-<not set>}"
+	@echo "Signing Password: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingPassword" ]; then echo "<set, length=$${#ORG_GRADLE_PROJECT_signingPassword}>"; else echo "<not set>"; fi)"
+	@echo "Signing Key: $$(if [ -n "$$ORG_GRADLE_PROJECT_signingKey" ]; then \
+		KEY_LEN=$${#ORG_GRADLE_PROJECT_signingKey}; \
+		KEY_START=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | head -c 50); \
+		KEY_END=$$(echo "$$ORG_GRADLE_PROJECT_signingKey" | tail -c 50); \
+		echo "<set, length=$$KEY_LEN, starts with: $$KEY_START..., ends with: ...$$KEY_END>"; \
+	else echo "<not set>"; fi)"
+	@echo "========================================="
+	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
+		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
+		-e ORG_GRADLE_PROJECT_sonatypeUsername \
+		-e ORG_GRADLE_PROJECT_sonatypePassword \
+		-e ORG_GRADLE_PROJECT_signingKeyId \
+		-e ORG_GRADLE_PROJECT_signingPassword \
+		-e ORG_GRADLE_PROJECT_signingKey \
+		$(DOCKER_IMAGE) \
+		sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) build :android:signMavenJavaPublication :client:signMavenJavaPublication :server:signMavenJavaPublication $(CROSS_COMPILE_SERVER)"
 
 # We could run these through Docker, but they would have the same result anyway.
 
