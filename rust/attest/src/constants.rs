@@ -25,9 +25,9 @@ pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
     &hex!("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6");
 
 pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
-    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
+    &hex!("97858810df5aaecaa10048fc56931badce985e5b260ca623993a363b8f5d760e");
 pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
-    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
+    &hex!("97858810df5aaecaa10048fc56931badce985e5b260ca623993a363b8f5d760e");
 
 pub const ENCLAVE_ID_SVRB_STAGING: &[u8] =
     &hex!("fefd012f3792a5ffd7d385171431adcde938ccb1346d1e1d9d2635da9c44da99");
