@@ -134,7 +134,7 @@ pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
     max_voting_replicas: 9,
     super_majority: 2,
     group_id: 9161153614836317716,
-    db_version: 4,
+    db_version: 2,
     attestation_timeout: 604800,
     simulated: false,
 };
@@ -144,7 +144,7 @@ pub const RAFT_CONFIG_SVRB_STAGING: &RaftConfig = &RaftConfig {
     max_voting_replicas: 9,
     super_majority: 0,
     group_id: 16478507710842799467,
-    db_version: 4,
+    db_version: 2,
     attestation_timeout: 604800,
     simulated: false,
 };
