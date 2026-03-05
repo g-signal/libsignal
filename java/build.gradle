@@ -16,7 +16,7 @@ plugins {
 }
 
 allprojects {
-    version = "0.76.10"
+    version = "0.76.11"
     group   = "io.github.wanggenlin"
 
     tasks.withType(KotlinCompile).configureEach {

@@ -24,6 +24,11 @@ pub const ENCLAVE_ID_SVR2_STAGING_2025Q2: &[u8] =
 pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
     &hex!("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6");
 
+pub const ENCLAVE_ID_SVR2_STAGING_260305: &[u8] =
+    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
+pub const ENCLAVE_ID_SVR2_PROD_260305: &[u8] =
+    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
+
 pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
     &hex!("97858810df5aaecaa10048fc56931badce985e5b260ca623993a363b8f5d760e");
 pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
@@ -34,7 +39,7 @@ pub const ENCLAVE_ID_SVRB_STAGING: &[u8] =
 
 /// Map from MREnclave to intel SW advisories that are known to be mitigated in the
 /// build with that MREnclave value
-pub(crate) const ACCEPTABLE_SW_ADVISORIES: &SmallMap<&'static [u8], &'static [&'static str], 7> =
+pub(crate) const ACCEPTABLE_SW_ADVISORIES: &SmallMap<&'static [u8], &'static [&'static str], 9> =
     &SmallMap::new([
         (
             ENCLAVE_ID_SVR2_STAGING_PREQUANTUM,
@@ -58,6 +63,14 @@ pub(crate) const ACCEPTABLE_SW_ADVISORIES: &SmallMap<&'static [u8], &'static [&'
         ),
         (
             ENCLAVE_ID_SVR2_PROD,
+            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
+        ),
+        (
+            ENCLAVE_ID_SVR2_STAGING_260305,
+            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
+        ),
+        (
+            ENCLAVE_ID_SVR2_PROD_260305,
             &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
         ),
         (
@@ -139,6 +152,26 @@ pub const RAFT_CONFIG_SVR2_PROD: &RaftConfig = &RaftConfig {
     simulated: false,
 };
 
+pub const RAFT_CONFIG_SVR2_STAGING_260305: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 1,
+    max_voting_replicas: 9,
+    super_majority: 2,
+    group_id: 9161153614836317716,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVR2_PROD_260305: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 1,
+    max_voting_replicas: 9,
+    super_majority: 2,
+    group_id: 9161153614836317716,
+    db_version: 2,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
 pub const RAFT_CONFIG_SVRB_STAGING: &RaftConfig = &RaftConfig {
     min_voting_replicas: 3,
     max_voting_replicas: 9,
@@ -151,7 +184,7 @@ pub const RAFT_CONFIG_SVRB_STAGING: &RaftConfig = &RaftConfig {
 
 // This is left here primarily to support SVR2 bridging code that does
 // not expose the notion of environment to the clients.
-pub(crate) static EXPECTED_RAFT_CONFIG_SVR2: SmallMap<&'static [u8], &'static RaftConfig, 6> =
+pub(crate) static EXPECTED_RAFT_CONFIG_SVR2: SmallMap<&'static [u8], &'static RaftConfig, 8> =
     SmallMap::new([
         (
             ENCLAVE_ID_SVR2_STAGING_PREQUANTUM,
@@ -168,4 +201,9 @@ pub(crate) static EXPECTED_RAFT_CONFIG_SVR2: SmallMap<&'static [u8], &'static Ra
         (ENCLAVE_ID_SVR2_PROD_2025Q2, RAFT_CONFIG_SVR2_PROD_2025Q2),
         (ENCLAVE_ID_SVR2_STAGING, RAFT_CONFIG_SVR2_STAGING),
         (ENCLAVE_ID_SVR2_PROD, RAFT_CONFIG_SVR2_PROD),
+        (
+            ENCLAVE_ID_SVR2_STAGING_260305,
+            RAFT_CONFIG_SVR2_STAGING_260305,
+        ),
+        (ENCLAVE_ID_SVR2_PROD_260305, RAFT_CONFIG_SVR2_PROD_260305),
     ]);
