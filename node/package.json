@@ -1,6 +1,6 @@
 {
   "name": "@gg-signal/libsignal-client",
-  "version": "0.76.12",
+  "version": "0.76.13",
   "license": "AGPL-3.0-only",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
