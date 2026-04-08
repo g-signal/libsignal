@@ -5,7 +5,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'LibSignalClient'
-  s.version          = '0.76.7-BA'
+  s.version          = '0.77.1-BA'
   s.summary          = 'A Swift wrapper library for communicating with the Signal messaging service.'
 
   s.homepage         = 'https://github.com/g-signal/libsignal'
@@ -65,7 +65,7 @@ Pod::Spec.new do |s|
       # but I wouldn't want to risk a mismatched archive giving us cryptic errors at link or run
       # time later. This Is Fine.
       always_out_of_date: '1',
-      script: %(
+      script: %q(
         set -euo pipefail
         if [ -e "${PODS_TARGET_SRCROOT}/swift/build_ffi.sh" ]; then
           # Local development

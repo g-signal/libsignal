@@ -9,62 +9,67 @@ use crate::enclave::HandshakeType;
 use crate::svr2::RaftConfig;
 use crate::util::SmallMap;
 
-pub const ENCLAVE_ID_CDSI_STAGING: &[u8] =
-    &hex!("a1bc651354e220714c84d6016310334c4bfe5605b1c7608bd030258d5094806d");
-pub const ENCLAVE_ID_CDSI_PROD: &[u8] =
-    &hex!("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05");
+/// A helper macro to allow specifying advisories lists conveniently.
+macro_rules! advisories {
+    (common) => {
+        &["INTEL-SA-00615", "INTEL-SA-00657"]
+    };
+    ($custom:expr) => {
+        &$custom
+    };
+}
 
-pub const ENCLAVE_ID_SVR2_STAGING_PREQUANTUM: &[u8] =
-    &hex!("38e01eff4fe357dc0b0e8ef7a44b4abc5489fbccba3a78780f3872c277f62bf3");
-pub const ENCLAVE_ID_SVR2_PROD_PREQUANTUM: &[u8] =
-    &hex!("9314436a9a144992bb3680770ea5fd7934a7ffd29257844a33763a238903d570");
+/// Defines the list of supported enclaves.
+///
+/// Does it in a way that is convenient and correct.
+///
+/// The acceptable SW advisories can be either specified as `common` or as an array of string literals.
+///
+/// ```text
+/// def_enclaves! {
+///     MY_ENCLAVE_NAME => ("hex_of_enclave_id", common),
+///     MY_OTHER_ENCLAVE_NAME => ("hex_of_enclave_id", ["INTEL-SA-00615"]),
+/// }
+/// ```
+macro_rules! def_enclaves {
+    ( $( $name:ident => ( $id_hex:expr , $advisories:tt ) ),* $(,)? ) => {
+        $(
+            pub const $name: &[u8] = &hex!($id_hex);
+        )*
 
-pub const ENCLAVE_ID_SVR2_STAGING_2025Q2: &[u8] =
-    &hex!("2e8cefe6e3f389d8426adb24e9b7fb7adf10902c96f06f7bbcee36277711ed91");
-pub const ENCLAVE_ID_SVR2_PROD_2025Q2: &[u8] =
-    &hex!("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6");
+        const ALL_ENCLAVE_IDS: &[&[u8]] = &[
+            $( $name, )*
+        ];
 
-pub const ENCLAVE_ID_SVR2_STAGING: &[u8] =
-    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
-pub const ENCLAVE_ID_SVR2_PROD: &[u8] =
-    &hex!("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f");
+        const ENCLAVE_COUNT: usize = ALL_ENCLAVE_IDS.len();
 
-pub const ENCLAVE_ID_SVRB_STAGING: &[u8] =
-    &hex!("fefd012f3792a5ffd7d385171431adcde938ccb1346d1e1d9d2635da9c44da99");
+        /// Map from MREnclave to intel SW advisories that are known to be mitigated in the
+        /// build with that MREnclave value
+        pub(crate) const ACCEPTABLE_SW_ADVISORIES: &SmallMap<&'static [u8], &'static [&'static str], ENCLAVE_COUNT> =
+            &SmallMap::new([
+                $(
+                    ($name, advisories!($advisories)),
+                )*
+            ]);
+    };
+}
 
-/// Map from MREnclave to intel SW advisories that are known to be mitigated in the
-/// build with that MREnclave value
-pub(crate) const ACCEPTABLE_SW_ADVISORIES: &SmallMap<&'static [u8], &'static [&'static str], 7> =
-    &SmallMap::new([
-        (
-            ENCLAVE_ID_SVR2_STAGING_PREQUANTUM,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVR2_PROD_PREQUANTUM,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVR2_STAGING_2025Q2,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVR2_PROD_2025Q2,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVR2_STAGING,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVR2_PROD,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-        (
-            ENCLAVE_ID_SVRB_STAGING,
-            &["INTEL-SA-00615", "INTEL-SA-00657"] as &[&str],
-        ),
-    ]);
+def_enclaves! {
+    ENCLAVE_ID_SVR2_STAGING_PREQUANTUM => ("38e01eff4fe357dc0b0e8ef7a44b4abc5489fbccba3a78780f3872c277f62bf3", common),
+    ENCLAVE_ID_SVR2_PROD_PREQUANTUM => ("9314436a9a144992bb3680770ea5fd7934a7ffd29257844a33763a238903d570", common),
+    ENCLAVE_ID_SVR2_STAGING_2025Q2 => ("2e8cefe6e3f389d8426adb24e9b7fb7adf10902c96f06f7bbcee36277711ed91", common),
+    ENCLAVE_ID_SVR2_PROD_2025Q2 => ("093be9ea32405e85ae28dbb48eb668aebeb7dbe29517b9b86ad4bec4dfe0e6a6", common),
+    ENCLAVE_ID_SVR2_STAGING => ("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f", common),
+    ENCLAVE_ID_SVR2_PROD => ("b49a2d7aa6a92623713541be3342cc2432cbb4052a9ab83b50aef3375651e68f", common),
+    ENCLAVE_ID_SVRB_STAGING => ("a75542d82da9f6914a1e31f8a7407053b99cc99a0e7291d8fbd394253e19b036", common),
+    ENCLAVE_ID_SVRB_PROD => ("aa906dbc85965d37accb660b65a8c224f037b0e7cfd034532acada3592e5b446", common),
+    ENCLAVE_ID_CDSI_STAGING => ("a1bc651354e220714c84d6016310334c4bfe5605b1c7608bd030258d5094806d", common),
+    ENCLAVE_ID_CDSI_PROD => ("3ded708ca5a42fd84b4639dc661a7ec4b9c9f1b92809c0fc91da2349a5a89d05", common),
+}
+
+/// SW advisories known to be mitigated by default. If an MREnclave is provided that
+/// is not contained in `ACCEPTABLE_SW_ADVISORIES`, this will be used
+pub(crate) const DEFAULT_SW_ADVISORIES: &[&str] = &[];
 
 pub(crate) const SVR2_POSTQUANTUM_OVERRIDE: &SmallMap<&'static [u8], HandshakeType, 2> =
     &SmallMap::new([
@@ -74,10 +79,6 @@ pub(crate) const SVR2_POSTQUANTUM_OVERRIDE: &SmallMap<&'static [u8], HandshakeTy
         ),
         (ENCLAVE_ID_SVR2_PROD_PREQUANTUM, HandshakeType::PreQuantum),
     ]);
-
-/// SW advisories known to be mitigated by default. If an MREnclave is provided that
-/// is not contained in `ACCEPTABLE_SW_ADVISORIES`, this will be used
-pub(crate) const DEFAULT_SW_ADVISORIES: &[&str] = &[];
 
 /// Expected raft configuration for a given enclave.
 pub const RAFT_CONFIG_SVR2_STAGING_PREQUANTUM: &RaftConfig = &RaftConfig {
@@ -143,7 +144,17 @@ pub const RAFT_CONFIG_SVRB_STAGING: &RaftConfig = &RaftConfig {
     min_voting_replicas: 3,
     max_voting_replicas: 9,
     super_majority: 0,
-    group_id: 16478507710842799467,
+    group_id: 5762521016145161874,
+    db_version: 4,
+    attestation_timeout: 604800,
+    simulated: false,
+};
+
+pub const RAFT_CONFIG_SVRB_PROD: &RaftConfig = &RaftConfig {
+    min_voting_replicas: 4,
+    max_voting_replicas: 13,
+    super_majority: 2,
+    group_id: 17845984565043772621,
     db_version: 4,
     attestation_timeout: 604800,
     simulated: false,
