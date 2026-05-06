@@ -141,7 +141,7 @@ const DOMAIN_CONFIG_SVR2_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "svrb.staging.signal.org",
+        hostname: "svrb.imba-test.com",
         port: DEFAULT_HTTPS_PORT,
         cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
@@ -157,7 +157,7 @@ const DOMAIN_CONFIG_SVRB_STAGING: DomainConfig = DomainConfig {
 
 const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
-        hostname: "svrb.signal.org",
+        hostname: "svrb.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
         cert: SIGNAL_ROOT_CERTIFICATES,
         min_tls_version: Some(SslVersion::TLS1_3),
