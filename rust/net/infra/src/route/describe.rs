@@ -15,10 +15,10 @@ use crate::dns::dns_utils::log_safe_domain;
 use crate::errors::LogSafeDisplay;
 use crate::host::Host;
 use crate::route::{
-    ConnectionProxyKind, ConnectionProxyRoute, Connector, DirectOrProxyRoute,
+    ConnectionProxyKind, ConnectionProxyRoute, Connector, DEFAULT_HTTPS_PORT, DirectOrProxyRoute,
     HttpProxyRouteFragment, HttpsProxyRoute, HttpsTlsRoute, ProxyTarget, ResolveHostnames,
     ResolvedRoute, SocksRoute, TcpRoute, TlsRoute, TransportRoute, UnresolvedHost,
-    UnresolvedTransportRoute, UnresolvedWebsocketServiceRoute, UsesTransport, DEFAULT_HTTPS_PORT,
+    UnresolvedTransportRoute, UnresolvedWebsocketServiceRoute, UsesTransport,
 };
 
 /// A type that is not itself loggable but can produce a [`LogSafeDisplay`]
@@ -134,6 +134,14 @@ impl std::fmt::Display for UnresolvedRouteDescription {
 }
 
 impl UnresolvedRouteDescription {
+    pub fn proxy(&self) -> Option<ConnectionProxyKind> {
+        self.proxy
+    }
+
+    pub fn domain_front(&self) -> Option<&'static str> {
+        self.front
+    }
+
     pub fn fake() -> Self {
         Self {
             front: None,
@@ -170,7 +178,12 @@ impl<Transport: UsesTransport<UnresolvedTransportRoute>> DescribeForLog
                 (Host::Domain(address.clone().into()), *port)
             }
             DirectOrProxyRoute::Proxy(proxy) => match proxy {
-                ConnectionProxyRoute::Tls { proxy: _ } | ConnectionProxyRoute::Tcp { proxy: _ } => {
+                ConnectionProxyRoute::Tls { proxy: _ } => {
+                    // The host is implicit; the proxy will look for the TLS SNI and resolve that.
+                    (tls_fragment.sni.clone(), DEFAULT_HTTPS_PORT)
+                }
+                #[cfg(feature = "dev-util")]
+                ConnectionProxyRoute::Tcp { proxy: _ } => {
                     // The host is implicit; the proxy will look for the TLS SNI and resolve that.
                     (tls_fragment.sni.clone(), DEFAULT_HTTPS_PORT)
                 }

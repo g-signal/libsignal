@@ -12,43 +12,12 @@ use futures_util::{SinkExt as _, Stream, StreamExt as _};
 use pin_project::pin_project;
 use tokio::select;
 use tokio::time::{Duration, Instant};
-use tungstenite::protocol::frame::coding::CloseCode;
-use tungstenite::protocol::CloseFrame;
 use tungstenite::Message;
+use tungstenite::protocol::CloseFrame;
+use tungstenite::protocol::frame::coding::CloseCode;
 
 use crate::errors::LogSafeDisplay;
-use crate::ws::{TextOrBinary, WebSocketServiceError, WebSocketStreamLike};
-
-pub mod attested;
-
-/// Configuration values for managing the connected websocket.
-#[derive(Clone, Copy)]
-pub struct Config {
-    /// How long to wait after the last outgoing message before sending a
-    /// [`Message::Ping`].
-    ///
-    /// This time is measured across calls to [`Connection::handle_next_event`]
-    /// from the last time an outgoing frame was sent.
-    pub local_idle_timeout: Duration,
-
-    /// The amount of time to wait after the last message received from the
-    /// server before sending a [`Message::Ping`].
-    ///
-    /// This time is measured across calls to [`Connection::handle_next_event`],
-    /// from the most recent message received from the server.
-    pub remote_idle_ping_timeout: Duration,
-
-    /// The amount of time to wait after the last message received from the
-    /// server before disconnecting.
-    ///
-    /// This time is measured across calls to [`Connection::handle_next_event`],
-    /// from the most recent message received from the server.
-    ///
-    /// This should be longer than [`Self::remote_idle_ping_timeout`] to allow
-    /// the server time to respond to a sent ping before determining that the
-    /// connection is dead.
-    pub remote_idle_disconnect_timeout: Duration,
-}
+use crate::ws::{Config, TextOrBinary, WebSocketError, WebSocketStreamLike};
 
 /// An established websocket connection.
 ///
@@ -554,19 +523,19 @@ impl From<TungsteniteReceiveError> for TungsteniteError {
     }
 }
 
-impl From<TungsteniteSendError> for WebSocketServiceError {
+impl From<TungsteniteSendError> for WebSocketError {
     fn from(value: TungsteniteSendError) -> Self {
         TungsteniteError::from(value).into()
     }
 }
 
-impl From<TungsteniteReceiveError> for WebSocketServiceError {
+impl From<TungsteniteReceiveError> for WebSocketError {
     fn from(value: TungsteniteReceiveError) -> Self {
         TungsteniteError::from(value).into()
     }
 }
 
-impl From<TungsteniteError> for WebSocketServiceError {
+impl From<TungsteniteError> for WebSocketError {
     fn from(value: TungsteniteError) -> Self {
         match value {
             TungsteniteError::AlreadyClosed | TungsteniteError::ConnectionClosed => {
@@ -598,7 +567,7 @@ impl From<tungstenite::Error> for TungsteniteError {
                 max_size,
             }) => Self::CapacityErrorMessageTooLarge { size, max_size },
             tungstenite::Error::Protocol(e) => Self::Protocol(e),
-            tungstenite::Error::Utf8 => Self::Utf8,
+            tungstenite::Error::Utf8(_) => Self::Utf8,
 
             tungstenite::Error::WriteBufferFull(_) => Self::WriteBufferFull,
             tungstenite::Error::Url(_) => {
@@ -644,7 +613,7 @@ mod test {
     use std::task::{Context, Poll};
 
     use assert_matches::assert_matches;
-    use futures_util::{pin_mut, FutureExt as _};
+    use futures_util::{FutureExt as _, pin_mut};
     use tokio::sync::mpsc;
     use tokio_stream::wrappers::ReceiverStream;
 

@@ -19,16 +19,12 @@ use crate::*;
 pub enum CdsiError {
     /// Protocol error after establishing a connection
     Protocol,
-    /// Invalid response received from the server
-    InvalidResponse,
     /// Retry later
     RateLimited(RetryLater),
-    /// Failed to parse the response from the server
-    ParseError,
     /// Request token was invalid
     InvalidToken,
-    /// Response token was missing
-    NoTokenInResponse,
+    /// CDS protocol: {0}
+    CdsiProtocol(cdsi::CdsiProtocolError),
     /// Server error: {reason}
     Server { reason: &'static str },
 }
@@ -52,7 +48,7 @@ pub struct CdsiLookup {
 impl CdsiLookup {
     pub async fn new_routes(
         connection_manager: &ConnectionManager,
-        auth: Auth,
+        auth: &Auth,
         request: cdsi::LookupRequest,
     ) -> Result<Self, cdsi::LookupError> {
         let env_cdsi = &connection_manager.env.cdsi;

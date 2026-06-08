@@ -338,7 +338,7 @@ jobs:
     - run: npm ci
       working-directory: node
 
-    - run: npx node-gyp rebuild
+    - run: npm run build
       working-directory: node
 
     - run: npm run tsc
@@ -417,13 +417,6 @@ jobs:
       - name: Check formatting
         run: swift format --in-place --parallel --recursive . && git diff --exit-code .
         working-directory: swift
-        env:
-          # This is only here because we're on a macOS 15 runner, which defaults to Xcode 16.0,
-          # which contains a swift-format that fails on some of our Swift 6.0 code.
-          # Once we're on a later runner, this should be removed.
-          # We should know that immediately if this stays at 16.2,
-          # because the new runners usually only keep one previous Xcode major version.
-          DEVELOPER_DIR: /Applications/Xcode_16.2.app
 
       - name: Run lint
         run: swiftlint lint --strict --reporter github-actions-logging

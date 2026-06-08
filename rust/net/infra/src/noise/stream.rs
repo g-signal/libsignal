@@ -5,7 +5,7 @@
 
 use std::io::Error as IoError;
 use std::pin::Pin;
-use std::task::{ready, Context, Poll};
+use std::task::{Context, Poll, ready};
 
 use attest::client_connection::{ClientConnection, NOISE_TRANSPORT_PER_PAYLOAD_MAX};
 use bytes::Bytes;
@@ -14,6 +14,7 @@ use futures_util::{SinkExt as _, StreamExt as _};
 use snow::TransportState;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+use crate::Connection;
 use crate::noise::{FrameType, Transport};
 
 /// Stream abstraction that encrypts/decrypts with [Noise].
@@ -62,6 +63,12 @@ impl<S> NoiseStream<S> {
             read: Read::default(),
             write: Write::default(),
         }
+    }
+}
+
+impl<S: Connection> Connection for NoiseStream<S> {
+    fn transport_info(&self) -> crate::TransportInfo {
+        self.inner.transport_info()
     }
 }
 
@@ -255,7 +262,7 @@ mod test {
     use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
     use super::*;
-    use crate::noise::testutil::{echo_forever, new_transport_pair, ErrorSink as _};
+    use crate::noise::testutil::{ErrorSink as _, echo_forever, new_transport_pair};
     use crate::noise::{FrameType, HandshakeAuthKind};
     use crate::utils::testutil::TestWaker;
 

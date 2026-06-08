@@ -48,8 +48,8 @@ export enum ErrorCode {
   SvrDataMissing,
   SvrRequestFailed,
   SvrRestoreFailed,
-  SvrMultipleErrors,
   SvrAttestationError,
+  SvrInvalidData,
 
   ChatServiceInactive,
   AppExpired,
@@ -63,6 +63,8 @@ export enum ErrorCode {
 
   KeyTransparencyError,
   KeyTransparencyVerificationFailed,
+
+  IncrementalMacVerificationFailed,
 }
 
 export class LibSignalErrorBase extends Error {
@@ -294,12 +296,12 @@ export type SvrRestoreFailedError = LibSignalErrorCommon & {
   readonly triesRemaining: number;
 };
 
-export type SvrMultipleErrorsError = LibSignalErrorCommon & {
-  code: ErrorCode.SvrMultipleErrors;
-};
-
 export type SvrAttestationError = LibSignalErrorCommon & {
   code: ErrorCode.SvrAttestationError;
+};
+
+export type SvrInvalidDataError = LibSignalErrorCommon & {
+  code: ErrorCode.SvrInvalidData;
 };
 
 export type BackupValidationError = LibSignalErrorCommon & {
@@ -317,6 +319,10 @@ export type KeyTransparencyError = LibSignalErrorCommon & {
 
 export type KeyTransparencyVerificationFailed = LibSignalErrorCommon & {
   code: ErrorCode.KeyTransparencyVerificationFailed;
+};
+
+export type IncrementalMacVerificationFailed = LibSignalErrorCommon & {
+  code: ErrorCode.IncrementalMacVerificationFailed;
 };
 
 export type LibSignalError =
@@ -351,8 +357,8 @@ export type LibSignalError =
   | SvrDataMissingError
   | SvrRestoreFailedError
   | SvrRequestFailedError
-  | SvrMultipleErrorsError
   | SvrAttestationError
+  | SvrInvalidDataError
   | UnsupportedMediaInputError
   | ChatServiceInactive
   | AppExpiredError
@@ -364,4 +370,5 @@ export type LibSignalError =
   | BackupValidationError
   | CancellationError
   | KeyTransparencyError
-  | KeyTransparencyVerificationFailed;
+  | KeyTransparencyVerificationFailed
+  | IncrementalMacVerificationFailed;

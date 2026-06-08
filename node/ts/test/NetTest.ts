@@ -803,11 +803,6 @@ describe('cdsi lookup', () => {
           ErrorCode.Generic,
           'attestation data invalid: fake reason',
         ],
-        [
-          'InvalidResponse',
-          ErrorCode.IoError,
-          'invalid response received from the server',
-        ],
         ['RetryAfter42Seconds', ErrorCode.RateLimitedError, 'retry after 42s'],
         [
           'InvalidToken',
@@ -820,21 +815,20 @@ describe('cdsi lookup', () => {
           'request was invalid: fake reason',
         ],
         [
-          'Parse',
+          'TcpConnectFailed',
           ErrorCode.IoError,
-          'failed to parse the response from the server',
-        ],
-        [
-          'ConnectDnsFailed',
-          ErrorCode.IoError,
-          'transport failed: DNS lookup failed',
+          'transport failed: Failed to establish TCP connection to any of the IPs',
         ],
         [
           'WebSocketIdleTooLong',
           ErrorCode.IoError,
           'websocket error: channel was idle for too long',
         ],
-        ['ConnectionTimedOut', ErrorCode.IoError, 'connect attempt timed out'],
+        [
+          'AllConnectionAttemptsFailed',
+          ErrorCode.IoError,
+          'no connection attempts succeeded before timeout',
+        ],
         ['ServerCrashed', ErrorCode.IoError, 'server error: crashed'],
       ];
       cases.forEach((testCase) => {

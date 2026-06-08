@@ -3,9 +3,9 @@ name: Slow Tests
 env:
   ANDROID_NDK_VERSION: 28.0.13004108
   LIBSIGNAL_TESTING_CDSI_ENCLAVE_SECRET: ${{secrets.CDSI_ENCLAVE_SECRET}}
-  LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS: true
   LIBSIGNAL_TESTING_PROXY_SERVER: ${{secrets.LIBSIGNAL_TESTING_PROXY_SERVER}}
-  RUST_LOG: debug
+  LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS: true
+  LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET: ${{secrets.LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET}}
 
 on:
   schedule:
@@ -22,7 +22,7 @@ on:
         required: true
         # This is redundant with specifying it at the use site, but makes it appear in the website UI.
         # See https://github.com/actions/runner-images/blob/main/README.md#available-images
-        default: 'macos-15'
+        default: 'macos-15-xlarge'
 
 jobs:
   java-docker:
@@ -238,7 +238,7 @@ jobs:
       with:
         submodules: recursive
     - run: node/docker-prebuildify.sh
-    - run: npm run tsc && npm run test
+    - run: npm ci && npm run tsc && npm run test
       working-directory: node
       env:
         PREBUILDS_ONLY: 1
@@ -311,17 +311,21 @@ jobs:
     - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.2
       with:
         node-version-file: '.nvmrc'
-    - run: npm ci
-      working-directory: node
     - name: Build for arm64
-      run: npx prebuildify --napi -t '${{ steps.get-nvm-version.outputs.node-version }}' --arch arm64
+      run: npm run build -- --arch arm64 --copy-to-prebuilds
       working-directory: node
 
   swift-cocoapod:
     name: Swift CocoaPod (all architectures)
-    runs-on: ${{ inputs.ios_runner || 'macos-15' }}
+    runs-on: ${{ inputs.ios_runner || 'macos-15-xlarge' }}
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
+
+    # Uncomment this to select a specific version of Xcode to build and test with. Check the runner
+    # image (in https://github.com/actions/runner-images/) to see which ones are available. You can
+    # also set this on specific steps if necessary.
+    # env:
+    #   DEVELOPER_DIR: /Applications/Xcode_16.2.app
 
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
@@ -386,16 +390,22 @@ jobs:
 
     - name: Run tests
       run: cargo +stable test --workspace --all-features --verbose --no-fail-fast -- --include-ignored
+      env:
+        RUST_LOG: debug
 
     - name: Run hermetic tests without network access
       run: |
-        TEST_CMD='unset LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS LIBSIGNAL_TESTING_CDSI_ENCLAVE_SECRET && \
+        TEST_CMD='unset LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS LIBSIGNAL_TESTING_CDSI_ENCLAVE_SECRET LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET && \
                   cargo +stable test --workspace --all-features --verbose --no-fail-fast -- --include-ignored'
         ./bin/run_with_network_isolation.sh "${TEST_CMD}"
+      env:
+        RUST_LOG: debug
 
     - name: Test run benches
       # Run with a match-all regex to select all the benchmarks, which (confusingly) causes other tests to be skipped.
       run: cargo +stable test --workspace --benches --all-features --no-fail-fast --verbose '.*'
+      env:
+        RUST_LOG: debug
 
     - name: Build bins and examples
       run: cargo +stable build --workspace  --bins --examples --all-features --verbose --keep-going
@@ -408,14 +418,20 @@ jobs:
     - name: Run tests (32-bit)
       # Exclude signal-neon-futures because those tests run Node
       run: cargo +stable test --workspace --all-features --verbose --target i686-unknown-linux-gnu --exclude signal-neon-futures --no-fail-fast -- --include-ignored
+      env:
+        RUST_LOG: debug
 
     - name: Run libsignal-protocol cross-version tests
       run: cargo +stable test --no-fail-fast
       working-directory: rust/protocol/cross-version-testing
+      env:
+        RUST_LOG: debug
 
     - name: Run libsignal-protocol cross-version tests (32-bit)
       run: cargo +stable test --target i686-unknown-linux-gnu --no-fail-fast
       working-directory: rust/protocol/cross-version-testing
+      env:
+        RUST_LOG: debug
 
     # We don't run Clippy because GitHub silently updates `stable` and that can introduce new lints,
     # and we don't have a guarantee that any particular pinned nightly can build older libsignals.
@@ -491,5 +507,6 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             commit_sha: context.sha,
-            body: 'Failed Slow Tests: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>'
+            body: 'Failed Slow Tests: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}>\n\n' +
+              'Note that a [later run](${{ github.server_url }}/${{ github.repository }}/actions/workflows/slow_tests.yml) may have succeeded.'
           })

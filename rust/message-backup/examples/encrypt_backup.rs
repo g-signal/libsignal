@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-use std::io::{stdout, Write as _};
+use std::io::{Write as _, stdout};
 
 use aes::cipher::crypto_common::rand_core::{OsRng, RngCore};
 use clap::{ArgAction, Parser};
@@ -14,8 +14,8 @@ use libsignal_message_backup::export::{
     aes_cbc_encrypt, gzip_compress, hmac_checksum, pad_gzipped_bucketed,
 };
 use libsignal_message_backup::key::MessageBackupKey;
-use libsignal_svrb::proto::backup_metadata::{metadata_pb, MetadataPb};
 use libsignal_svrb::proto::Message as _;
+use libsignal_svrb::proto::backup_metadata::{MetadataPb, metadata_pb};
 
 #[path = "../src/bin/support/mod.rs"]
 mod support;
@@ -86,9 +86,10 @@ fn main() {
             libsignal_message_backup::frame::forward_secrecy::MAGIC_NUMBER,
         );
         let faux_metadata = MetadataPb {
+            iv: b"iv_12_bytes_".to_vec(),
             pair: vec![metadata_pb::Pair {
-                ct: b"[ciphertext]".to_vec(),
-                pw_salt: b"[pw_salt]".to_vec(),
+                ct: [0xCC; 48].to_vec(),
+                pw_salt: [0x50; 32].to_vec(),
                 ..Default::default()
             }],
             ..Default::default()

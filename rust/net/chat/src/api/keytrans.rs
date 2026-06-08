@@ -337,6 +337,12 @@ pub trait UnauthenticatedChatApi {
     ) -> impl Future<Output = Result<AccountData, RequestError<Error>>> + Send;
 }
 
+#[derive(Eq, Debug, PartialEq, Clone, Copy)]
+pub enum MonitorMode {
+    MonitorSelf,
+    MonitorOther,
+}
+
 pub async fn monitor_and_search(
     kt: &impl UnauthenticatedChatApi,
     aci: &Aci,
@@ -345,6 +351,7 @@ pub async fn monitor_and_search(
     username_hash: Option<UsernameHash<'_>>,
     stored_account_data: AccountData,
     distinguished_tree_head: &LastTreeHead,
+    mode: MonitorMode,
 ) -> Result<MaybePartial<AccountData>, RequestError<Error>> {
     let updated_account_data = kt
         .monitor(
@@ -359,8 +366,19 @@ pub async fn monitor_and_search(
     // Call to `monitor` guarantees that the optionality of E.164 and username hash data
     // will match between `stored_account_data` and `updated_account_data`. Meaning, they will
     // either both be Some() or both None.
-    let should_search = has_version_changed_between(&stored_account_data, &updated_account_data);
-    let final_account_data = if should_search {
+    let version_changed = has_version_changed_between(&stored_account_data, &updated_account_data);
+
+    // In case of self-monitoring, it is an error to detect a version change.
+    if version_changed && matches!(mode, MonitorMode::MonitorSelf) {
+        return Err(RequestError::Other(
+            libsignal_keytrans::Error::VerificationFailed(
+                "version change detected while self-monitoring".to_string(),
+            )
+            .into(),
+        ));
+    }
+
+    let final_account_data = if version_changed {
         kt.search(
             aci,
             aci_identity_key,
@@ -384,6 +402,7 @@ fn cmp_by_key<T, K: Ord>(lhs: &T, rhs: &T, get_key: impl Fn(&T) -> K) -> Orderin
 /// and decide whether there is a newer version of search key in the tree, in which
 /// case search request needs to be performed.
 fn has_version_changed_between(stored: &AccountData, updated: &AccountData) -> bool {
+    let aci_version = |acc_data: &AccountData| Some(acc_data.aci.greatest_version());
     let e164_version =
         |acc_data: &AccountData| acc_data.e164.as_ref().map(|md| md.greatest_version());
     let username_hash_version = |acc_data: &AccountData| {
@@ -393,7 +412,8 @@ fn has_version_changed_between(stored: &AccountData, updated: &AccountData) -> b
             .map(|md| md.greatest_version())
     };
 
-    cmp_by_key(stored, updated, e164_version) == Ordering::Less
+    cmp_by_key(stored, updated, aci_version) == Ordering::Less
+        || cmp_by_key(stored, updated, e164_version) == Ordering::Less
         || cmp_by_key(stored, updated, username_hash_version) == Ordering::Less
 }
 
@@ -898,11 +918,15 @@ pub(crate) mod test_support {
         include_bytes!("../../../tests/data/chat_search_response.dat");
     pub const CHAT_SEARCH_RESPONSE_VALID_AT: Duration = Duration::from_secs(1746042060);
 
-    const DISTINGUISHED_TREE_25223230_HEAD: &[u8] = &hex!("08bec0830c10f1beddc1e8321a640a201123b13ee32479ae6af5739e5d687b51559abf7684120511f68cde7a21a0e75512404dc142dc8f20605328f39b230b7f4160638c8c9c0fd1985b5348d152bd482c449efbba837ac5bed017e02216ae26ca72fd0b654401c99fdbaa0fdcee38d4a90b");
+    const DISTINGUISHED_TREE_25223230_HEAD: &[u8] = &hex!(
+        "08bec0830c10f1beddc1e8321a640a201123b13ee32479ae6af5739e5d687b51559abf7684120511f68cde7a21a0e75512404dc142dc8f20605328f39b230b7f4160638c8c9c0fd1985b5348d152bd482c449efbba837ac5bed017e02216ae26ca72fd0b654401c99fdbaa0fdcee38d4a90b"
+    );
     const DISTINGUISHED_TREE_25223230_ROOT: &[u8] =
         &hex!("85d15cf60676285c0105d9474139dfc7b070996c6dba7ab12ccf2ffcfff8cbcd");
 
-    const STORED_ACCOUNT_DATA_25223245: &[u8] = &hex!("0a2f0a203901c94081c4e6321e92b3e434dcaf788f5326913e7bdcab47b4fd2ae7a6848a10231a0708ffffff071002200112300a2086052cc2a2689558e852d053c5ab411d8c3baef20171ec298e551574806ca95d1081011a0708ffffff07100220011a300a20bc1cfaae736c27c437b99175798933ee32caf07a5226840ec963a4e614916e9010dc011a0708ffffff07100220012296010a7208cdc0830c10a8d6ddc1e8321a640a201123b13ee32479ae6af5739e5d687b51559abf7684120511f68cde7a21a0e75512408d5ed11ea43c26fc56d4758369210ecc79ffd24b3f45a54d827b2da29e5104bd67cdb69cb31b06704e4bcefe9e2a57f39e6a63237b86bfd054fe0c9ec001990b122048e51aeb705ffa2fe7bed5f7aad51d216c551547892280eded1db2708eba359a");
+    const STORED_ACCOUNT_DATA_25223245: &[u8] = &hex!(
+        "0a2f0a203901c94081c4e6321e92b3e434dcaf788f5326913e7bdcab47b4fd2ae7a6848a10231a0708ffffff071002200112300a2086052cc2a2689558e852d053c5ab411d8c3baef20171ec298e551574806ca95d1081011a0708ffffff07100220011a300a20bc1cfaae736c27c437b99175798933ee32caf07a5226840ec963a4e614916e9010dc011a0708ffffff071002200122300a0c08cdc0830c10a8d6ddc1e832122048e51aeb705ffa2fe7bed5f7aad51d216c551547892280eded1db2708eba359a"
+    );
 
     pub fn test_distinguished_tree() -> LastTreeHead {
         (
@@ -931,8 +955,8 @@ mod test {
     use test_case::test_case;
 
     use super::test_support::{
-        test_account, test_account_data, test_distinguished_tree, CHAT_SEARCH_RESPONSE,
-        CHAT_SEARCH_RESPONSE_VALID_AT, KEYTRANS_CONFIG_STAGING,
+        CHAT_SEARCH_RESPONSE, CHAT_SEARCH_RESPONSE_VALID_AT, KEYTRANS_CONFIG_STAGING, test_account,
+        test_account_data, test_distinguished_tree,
     };
     use super::*;
 
@@ -1104,6 +1128,7 @@ mod test {
             None,
             test_account_data(),
             &test_distinguished_tree(),
+            MonitorMode::MonitorOther,
         )
         .await;
         assert_matches!(
@@ -1126,6 +1151,7 @@ mod test {
             None,
             test_account_data(),
             &test_distinguished_tree(),
+            MonitorMode::MonitorOther,
         )
         .await
         .expect("monitor should succeed");
@@ -1133,23 +1159,31 @@ mod test {
     }
 
     enum BumpVersionFor {
+        Aci,
         E164,
         UsernameHash,
     }
 
+    impl BumpVersionFor {
+        pub fn apply(&self, acc_data: &mut AccountData) {
+            let subject = match self {
+                BumpVersionFor::Aci => &mut acc_data.aci,
+                BumpVersionFor::E164 => acc_data.e164.as_mut().unwrap(),
+                BumpVersionFor::UsernameHash => acc_data.username_hash.as_mut().unwrap(),
+            };
+            // inserting a newer version of the subject
+            let max_version = subject.greatest_version();
+            subject.ptrs.insert(u64::MAX, max_version + 1);
+        }
+    }
+
     #[tokio::test]
+    #[test_case(BumpVersionFor::Aci; "newer Aci")]
     #[test_case(BumpVersionFor::E164; "newer E.164")]
     #[test_case(BumpVersionFor::UsernameHash; "newer username hash")]
     async fn monitor_and_search_e164_changed(bump: BumpVersionFor) {
         let mut monitor_result = test_account_data();
-        let subject = match bump {
-            BumpVersionFor::E164 => monitor_result.e164.as_mut(),
-            BumpVersionFor::UsernameHash => monitor_result.username_hash.as_mut(),
-        }
-        .unwrap();
-        // inserting a newer version of the subject
-        let max_version = subject.greatest_version();
-        subject.ptrs.insert(u64::MAX, max_version + 1);
+        bump.apply(&mut monitor_result);
 
         let kt = TestKt::new(
             Ok(monitor_result.clone()),
@@ -1166,6 +1200,7 @@ mod test {
             None,
             test_account_data(),
             &test_distinguished_tree(),
+            MonitorMode::MonitorOther,
         )
         .await;
 
@@ -1174,6 +1209,41 @@ mod test {
         assert_matches!(
             result,
             Err(RequestError::Unexpected { log_safe: msg }) if msg == "pass through unexpected error"
+        );
+    }
+
+    #[tokio::test]
+    #[test_case(BumpVersionFor::Aci; "newer Aci")]
+    #[test_case(BumpVersionFor::E164; "newer E.164")]
+    #[test_case(BumpVersionFor::UsernameHash; "newer username hash")]
+    async fn monitor_and_search_self_monitor_fail_on_version_change(bump: BumpVersionFor) {
+        let mut monitor_result = test_account_data();
+        bump.apply(&mut monitor_result);
+
+        let kt = TestKt::new(
+            Ok(monitor_result.clone()),
+            Err(RequestError::Unexpected {
+                log_safe: "pass through unexpected error".to_owned(),
+            }),
+        );
+
+        let result = monitor_and_search(
+            &kt,
+            &test_account::aci(),
+            &test_account::aci_identity_key(),
+            None,
+            None,
+            test_account_data(),
+            &test_distinguished_tree(),
+            MonitorMode::MonitorSelf,
+        )
+        .await;
+
+        // monitor invocation should have succeeded, and search
+        // should not have been invoked
+        assert_matches!(
+            result,
+            Err(RequestError::Other(Error::VerificationFailed(_)))
         );
     }
 
@@ -1211,6 +1281,7 @@ mod test {
             None,
             test_account_data(),
             &test_distinguished_tree(),
+            MonitorMode::MonitorOther,
         )
         .await
         .expect("both monitor and search should have succeeded");

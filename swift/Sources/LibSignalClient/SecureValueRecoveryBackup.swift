@@ -26,30 +26,36 @@ import SignalFfi
 /// ## Storage Flow
 ///
 /// 1. Create a ``Net`` instance and get the `SvrB` service via ``Net/svrB(auth:)``
-/// 2. Call ``SvrB/storeBackup(backupKey:previousSecretData:)``
-///    - Pass the secret data from the last **successful** `storeBackup(backupKey:previousSecretData:)` call
-///    - If no previous backup exists or the secret data is unavailable, pass `nil`
-/// 3. Use the returned forward secrecy token to derive encryption keys
-/// 4. Encrypt and upload the backup data to the user's remote, off-device storage location, including the
-///    returned ``SvrB/StoreBackupResponse/metadata``. The upload **must succeed**
+/// 2. If this is a fresh install, call ``createNewBackupChain(backupKey:)`` and store the result locally.
+///    Otherwise, retrieve the secret data from the last **successful** backup operation (store or restore).
+/// 3. Call ``store(backupKey:previousSecretData:)``, passing the data from step (2).
+/// 4. Use the returned forward secrecy token to derive encryption keys
+/// 5. Encrypt and upload the backup data to the user's remote, off-device storage location, including the
+///    returned ``StoreBackupResponse/metadata``. The upload **must succeed**
 ///    before proceeding or the previous backup might become unretrievable.
-/// 5. Store the returned ``SvrB/StoreBackupResponse/nextBackupSecretData`` locally, overwriting any previously-saved value.
+/// 5. Store the returned ``StoreBackupResponse/nextBackupSecretData`` locally, overwriting any previously-saved value.
 ///
 /// ## Secret handling
 ///
-/// When calling ``SvrB/storeBackup(backupKey:previousSecretData:)``, the `previousSecretData` parameter
-/// must be from the last call to `storeBackup(backupKey:previousSecretData:)` that
-/// succeeded. The returned secret from a successful `storeBackup(backupKey:previousSecretData:)`
-/// call should be persisted until it is overwritten by the value from a subsequent successful call.
-/// The caller should pass `nil` as `previousSecretData` only for the very first backup from a device.
+/// When calling ``store(backupKey:previousSecretData:)``, the `previousSecretData` parameter must
+/// be from the last call to  `store` or `restore` that succeeded. This "chaining" is used to
+/// construct each backup file so that it can be decrypted with either the *previous* token stored
+/// in SVR-B, or the *next* one, which is important in case the overall backup upload is ever
+/// interrupted.
+///
+/// The returned secret from a successful store or restore should be persisted until it is
+/// overwritten by the value from a subsequent successful call. The caller should use
+/// ``createNewBackupChain(backupKey:)`` only for the very first backup with a particular backup
+/// key.
 ///
 /// ## Restore Flow
 ///
 /// 1. Create a ``Net`` instance and get the ``SvrB`` service via ``Net/svrB(auth:)``
 /// 2. Fetch the backup metadata from storage
-/// 3. Call ``SvrB/fetchForwardSecrecyTokenFromServer(backupKey:metadata:)`` to get the forward secrecy token
+/// 3. Call ``restore(backupKey:metadata:)`` to get the forward secrecy token
 /// 4. Use the token to derive decryption keys
 /// 5. Decrypt and restore the backup data
+/// 6. Store the returned ``RestoreBackupResponse/nextBackupSecretData`` locally.
 ///
 /// ## Usage
 /// ```swift
@@ -73,30 +79,60 @@ public class SvrB {
         self.auth = auth
     }
 
+    /// Generates backup "secret data" for a fresh install.
+    ///
+    /// Should not be used if any previous backups exist for this `backupKey`, whether uploaded or restored by the local device.
+    /// See ``SvrB`` for more information.
+    public func createNewBackupChain(backupKey: BackupKey) -> Data {
+        backupKey.withUnsafePointer { backupKey in
+            failOnError {
+                try invokeFnReturningData {
+                    signal_secure_value_recovery_for_backups_create_new_backup_chain(
+                        $0,
+                        net.environment.rawValue,
+                        backupKey
+                    )
+                }
+            }
+        }
+    }
+
     /// Prepares a backup for storage with forward secrecy guarantees.
     ///
-    /// This makes a network call to the SVR-B server to store the forward secrecy token
-    /// and returns a ``StoreBackupResponse``. See its fields' documentation and ``SvrB``
-    /// for how to continue persisting the backup on success.
+    /// This makes a network call to the SVR-B server to store the forward secrecy token and returns
+    /// a ``StoreBackupResponse``. See its fields' documentation and ``SvrB`` for how to continue
+    /// persisting the backup on success.
     ///
     /// - Parameters:
     ///   - backupKey: The backup key derived from the Account Entropy Pool (AEP).
-    ///   - previousSecretData: Optional secret data from the most recent previous backup.
-    ///     **Critical**: This MUST be the secret data from the last **successful**
-    ///     ``storeBackup(backupKey:previousSecretKey:)`` call whose returned `metadata` was
-    ///     successfully uploaded, and whose `nextBackupSecretData` was persisted.
-    ///     If `nil`, starts a new chain and renders any prior backups unretrievable; this should
-    ///     only be used for the very first backup from a device.
-    /// - Returns: A ``StoreBackupResponse`` containing the forward secrecy token, metadata, and secret data.
-    /// - Throws: ``SignalError`` if the previous secret data is malformed or processing or upload fail.
-    public func storeBackup(
+    ///   - previousSecretData: Secret data from the most recent previous backup operation.
+    ///     **Critical**: This MUST be the secret data from the most recent of the following:
+    ///     - the last **successful** ``store(backupKey:previousSecretKey:)`` call whose returned
+    ///       `metadata` was successfully uploaded, and whose `nextBackupSecretData` was persisted.
+    ///     - the last successful ``restore(backupKey:metadata:)``
+    ///     - the already-persisted result from ``createNewBackupChain(backupKey:)``, only if
+    ///       neither of the other two are available
+    /// - Returns: A ``StoreBackupResponse`` containing the forward secrecy token, metadata, and
+    ///   secret data.
+    /// - Throws:
+    ///   - ``SignalError/invalidArgument(_:)`` if `previousSecretData` is malformed. There's no
+    ///     choice here but to **start a new chain**.
+    ///   - ``SignalError/rateLimitedError(retryAfter:message:)`` if the server is rate limiting
+    ///     this client. This is **retryable** after waiting the designated delay.
+    ///   - ``SignalError/connectionFailed(_:)``, ``SignalError/ioError(_:)``, or
+    ///     ``SignalError/webSocketError(_:)`` for networking failures before and during
+    ///     communication with the server. These can be **automatically retried** (backoff
+    ///     recommended).
+    ///   - Other ``SignalError``s for networking and attestation issues. These can be manually
+    ///     retried, but some may indicate a possible bug in libsignal or in the enclave.
+    public func store(
         backupKey: BackupKey,
-        previousSecretData: Data?
+        previousSecretData: Data
     ) async throws -> StoreBackupResponse {
         let rawResult = try await self.net.asyncContext.invokeAsyncFunction { promise, runtime in
             net.connectionManager.withNativeHandle { connectionManager in
                 backupKey.withUnsafePointer { backupKey in
-                    (previousSecretData ?? Data()).withBorrowed { previousSecretData in
+                    previousSecretData.withBorrowed { previousSecretData in
                         signal_secure_value_recovery_for_backups_store_backup(
                             promise,
                             runtime.const(),
@@ -125,18 +161,34 @@ public class SvrB {
     /// 2. Call this function to retrieve the forward secrecy token from SVR-B
     /// 3. Use the token to derive message backup keys
     /// 4. Decrypt and restore the backup data
+    /// 5. Store the returned ``RestoreBackupResponse/nextBackupSecretData`` locally.
     ///
     /// - Parameters:
     ///   - backupKey: The backup key derived from the Account Entropy Pool (AEP).
-    ///   - metadata: The metadata that was stored in a header in the backup file during backup creation.
+    ///   - metadata: The metadata that was stored in a header in the backup file during backup
+    ///     creation.
     /// - Returns: The forward secrecy token needed to derive keys for decrypting the backup.
-    /// - Throws: ``SignalError`` if the metadata is invalid, the network operation fails, or the
-    ///   backup cannot be found.
-    public func fetchForwardSecrecyTokenFromServer(
+    /// - Throws:
+    ///   - ``SignalError/invalidArgument(_:)`` if the backup metadata is malformed. In this case
+    ///     the user's data is **not recoverable**.
+    ///   - ``SignalError/svrRestoreFailed(triesRemaining:message:)`` if restoration fails. This
+    ///     should never happen but if it does the user's data is **not recoverable**.
+    ///   - ``SignalError/svrDataMissing(_:)`` if the backup data is not found on the server,
+    ///     indicating an **incorrect backup key** (which may in turn imply the user's data is not
+    ///     recoverable).
+    ///   - ``SignalError/rateLimitedError(retryAfter:message:)`` if the server is rate limiting
+    ///     this client. This is **retryable** after waiting the designated delay.
+    ///   - ``SignalError/connectionFailed(_:)``, ``SignalError/ioError(_:)``, or
+    ///     ``SignalError/webSocketError(_:)`` for networking failures before and during
+    ///     communication with the server. These can be **automatically retried** (backoff
+    ///     recommended).
+    ///   - Other ``SignalError``s for networking and attestation issues. These can be manually
+    ///     retried, but some may indicate a possible bug in libsignal or in the enclave.
+    public func restore(
         backupKey: BackupKey,
         metadata: Data
-    ) async throws -> BackupForwardSecrecyToken {
-        let tokenBytes = try await self.net.asyncContext.invokeAsyncFunction {
+    ) async throws -> RestoreBackupResponse {
+        let rawResult = try await self.net.asyncContext.invokeAsyncFunction {
             promise,
             runtime in
             net.connectionManager.withNativeHandle { connectionManager in
@@ -156,8 +208,42 @@ public class SvrB {
             }
         }
 
-        let data = withUnsafeBytes(of: tokenBytes) { Data($0) }
-        return try BackupForwardSecrecyToken(contents: data)
+        return RestoreBackupResponse(owned: NonNull(rawResult)!)
+    }
+
+    /// Attempts to remove the info stored with SVR-B for this particular username/password pair.
+    ///
+    /// This is a best-effort operation; a successful return means the data has been removed from
+    /// (or never was present in) the current SVR-B enclaves, but may still be present in previous
+    /// ones that have yet to be decommissioned. Conversely, a thrown error may still have removed
+    /// information from previous enclaves.
+    ///
+    /// This should not typically be needed; rather than explicitly removing an entry, the client
+    /// should generally overwrite with a new ``store(backupKey:previousSecretData:)`` instead.
+    ///
+    /// - Throws:
+    ///   - ``SignalError/rateLimitedError(retryAfter:message:)`` if the server is rate limiting
+    ///     this client. This is **retryable** after waiting the designated delay.
+    ///   - ``SignalError/connectionFailed(_:)``, ``SignalError/ioError(_:)``, or
+    ///     ``SignalError/webSocketError(_:)`` for networking failures before and during
+    ///     communication with the server. These can be **automatically retried** (backoff
+    ///     recommended).
+    ///   - Other ``SignalError``s for networking and attestation issues. These can be manually
+    ///     retried, but some may indicate a possible bug in libsignal or in the enclave.
+    public func remove() async throws {
+        let _: Bool = try await self.net.asyncContext.invokeAsyncFunction {
+            promise,
+            runtime in
+            net.connectionManager.withNativeHandle { connectionManager in
+                signal_secure_value_recovery_for_backups_remove_backup(
+                    promise,
+                    runtime.const(),
+                    connectionManager.const(),
+                    self.auth.username,
+                    self.auth.password
+                )
+            }
+        }
     }
 }
 
@@ -171,11 +257,11 @@ extension SvrB {
     /// Forward Secrecy Token.
     ///
     /// - SeeAlso: ``BackupForwardSecrecyToken``
-    public class StoreBackupResponse: NativeHandleOwner<SignalMutPointerBackupResponse> {
+    public class StoreBackupResponse: NativeHandleOwner<SignalMutPointerBackupStoreResponse> {
         override internal class func destroyNativeHandle(
-            _ handle: NonNull<SignalMutPointerBackupResponse>
+            _ handle: NonNull<SignalMutPointerBackupStoreResponse>
         ) -> SignalFfiErrorRef? {
-            signal_backup_response_destroy(handle.pointer)
+            signal_backup_store_response_destroy(handle.pointer)
         }
 
         /// The forward secrecy token used to derive ``MessageBackupKey`` instances.
@@ -187,7 +273,7 @@ extension SvrB {
             withNativeHandle { nativeHandle in
                 failOnError {
                     let data = try invokeFnReturningFixedLengthArray {
-                        signal_backup_response_get_forward_secrecy_token($0, nativeHandle.const())
+                        signal_backup_store_response_get_forward_secrecy_token($0, nativeHandle.const())
                     }
                     return try BackupForwardSecrecyToken(contents: data)
                 }
@@ -204,13 +290,13 @@ extension SvrB {
             withNativeHandle { nativeHandle in
                 failOnError {
                     try invokeFnReturningData {
-                        signal_backup_response_get_opaque_metadata($0, nativeHandle.const())
+                        signal_backup_store_response_get_opaque_metadata($0, nativeHandle.const())
                     }
                 }
             }
         }
 
-        /// Opaque value that must be persisted and provided to the next call to ``SvrB/storeBackup(backupKey:previousSecretData:)``.
+        /// Opaque value that must be persisted and provided to the next call to ``SvrB/store(backupKey:previousSecretData:)``.
         ///
         /// See the ``SvrB`` documentation for lifecycle and persistence handling
         /// for this value.
@@ -219,7 +305,52 @@ extension SvrB {
             withNativeHandle { nativeHandle in
                 failOnError {
                     try invokeFnReturningData {
-                        signal_backup_response_get_next_backup_secret_data($0, nativeHandle.const())
+                        signal_backup_store_response_get_next_backup_secret_data($0, nativeHandle.const())
+                    }
+                }
+            }
+        }
+    }
+    /// The result of preparing a backup to be stored with forward secrecy guarantees.
+    ///
+    /// This context contains all the necessary components to encrypt and store a backup using a
+    /// key derived from both the user's Account Entropy Pool and the SVR-B-protected
+    /// Forward Secrecy Token.
+    ///
+    /// - SeeAlso: ``BackupForwardSecrecyToken``
+    public class RestoreBackupResponse: NativeHandleOwner<SignalMutPointerBackupRestoreResponse> {
+        override internal class func destroyNativeHandle(
+            _ handle: NonNull<SignalMutPointerBackupRestoreResponse>
+        ) -> SignalFfiErrorRef? {
+            signal_backup_restore_response_destroy(handle.pointer)
+        }
+
+        /// The forward secrecy token used to derive ``MessageBackupKey`` instances.
+        ///
+        /// This token provides forward secrecy guarantees by ensuring that compromise of the backup key
+        /// alone is insufficient to decrypt backups. Each backup is protected by a value stored on
+        /// the SVR-B server that must be retrieved during restoration.
+        public var forwardSecrecyToken: BackupForwardSecrecyToken {
+            withNativeHandle { nativeHandle in
+                failOnError {
+                    let data = try invokeFnReturningFixedLengthArray {
+                        signal_backup_restore_response_get_forward_secrecy_token($0, nativeHandle.const())
+                    }
+                    return try BackupForwardSecrecyToken(contents: data)
+                }
+            }
+        }
+
+        /// Opaque value that must be persisted and provided to the next call to ``SvrB/store(backupKey:previousSecretData:)``.
+        ///
+        /// See the ``SvrB`` documentation for lifecycle and persistence handling
+        /// for this value.
+        ///
+        public var nextBackupSecretData: Data {
+            withNativeHandle { nativeHandle in
+                failOnError {
+                    try invokeFnReturningData {
+                        signal_backup_restore_response_get_next_backup_secret_data($0, nativeHandle.const())
                     }
                 }
             }
@@ -229,8 +360,8 @@ extension SvrB {
 
 // MARK: - SignalMutPointer Conformances
 
-extension SignalMutPointerBackupResponse: SignalMutPointer {
-    public typealias ConstPointer = SignalConstPointerBackupResponse
+extension SignalMutPointerBackupStoreResponse: SignalMutPointer {
+    public typealias ConstPointer = SignalConstPointerBackupStoreResponse
 
     public init(untyped: OpaquePointer?) {
         self.init(raw: untyped)
@@ -245,7 +376,29 @@ extension SignalMutPointerBackupResponse: SignalMutPointer {
     }
 }
 
-extension SignalConstPointerBackupResponse: SignalConstPointer {
+extension SignalConstPointerBackupStoreResponse: SignalConstPointer {
+    public func toOpaque() -> OpaquePointer? {
+        self.raw
+    }
+}
+
+extension SignalMutPointerBackupRestoreResponse: SignalMutPointer {
+    public typealias ConstPointer = SignalConstPointerBackupRestoreResponse
+
+    public init(untyped: OpaquePointer?) {
+        self.init(raw: untyped)
+    }
+
+    public func toOpaque() -> OpaquePointer? {
+        self.raw
+    }
+
+    public func const() -> Self.ConstPointer {
+        Self.ConstPointer(raw: self.raw)
+    }
+}
+
+extension SignalConstPointerBackupRestoreResponse: SignalConstPointer {
     public func toOpaque() -> OpaquePointer? {
         self.raw
     }

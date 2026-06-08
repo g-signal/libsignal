@@ -6,14 +6,31 @@
 import { assert } from 'chai';
 import { Environment, Net, SvrB } from '../net';
 import { BackupKey, BackupForwardSecrecyToken } from '../AccountKeys';
+import { Aci } from '../Address';
+import * as Native from '../../Native';
 
 describe('SecureValueRecoveryBackup', () => {
+  const testAci = Aci.parseFromServiceIdString(
+    'e74beed0-e70f-4cfd-abbb-7e3eb333bbac'
+  );
   const testBackupKey = BackupKey.generateRandom();
+  const testBackupIdString = Buffer.from(
+    testBackupKey.deriveBackupId(testAci)
+  ).toString('hex');
   const testInvalidSecretData = new Uint8Array([1, 2, 3, 4]);
-  const testAuth = {
-    username: process.env.LIBSIGNAL_TESTING_SVRB_USERNAME || '',
-    password: process.env.LIBSIGNAL_TESTING_SVRB_PASSWORD || '',
-  };
+  const enclaveSecret = process.env.LIBSIGNAL_TESTING_SVRB_ENCLAVE_SECRET;
+  const testAuth = enclaveSecret
+    ? {
+        username: testBackupIdString,
+        password: Native.TESTING_CreateOTPFromBase64(
+          testBackupIdString,
+          enclaveSecret
+        ),
+      }
+    : {
+        username: process.env.LIBSIGNAL_TESTING_SVRB_USERNAME || '',
+        password: process.env.LIBSIGNAL_TESTING_SVRB_PASSWORD || '',
+      };
 
   let net: Net;
   let svrB: SvrB;
@@ -29,7 +46,7 @@ describe('SecureValueRecoveryBackup', () => {
       const invalidSecretData = new Uint8Array([0xff, 0xff, 0xff, 0xff]);
 
       return assert.isRejected(
-        svrB.storeBackup(testBackupKey, invalidSecretData),
+        svrB.store(testBackupKey, invalidSecretData),
         Error,
         'Invalid data from previous backup'
       );
@@ -38,30 +55,25 @@ describe('SecureValueRecoveryBackup', () => {
     it('throws error with arbitrary test secret data', async () => {
       // Arbitrary test secret data should cause an error
       return assert.isRejected(
-        svrB.storeBackup(testBackupKey, testInvalidSecretData),
+        svrB.store(testBackupKey, testInvalidSecretData),
         Error,
         'Invalid data from previous backup'
       );
     });
   });
 
-  describe('fetchForwardSecrecyTokenFromServer', () => {
+  describe('restoreBackup', () => {
     it('returns a promise', () => {
-      const result = svrB.fetchForwardSecrecyTokenFromServer(
-        testBackupKey,
-        new Uint8Array()
-      );
+      const result = svrB.restore(testBackupKey, new Uint8Array());
       assert.instanceOf(result, Promise);
       result.catch(() => {});
     });
 
     it('supports abort signal', () => {
       const abortController = new AbortController();
-      const result = svrB.fetchForwardSecrecyTokenFromServer(
-        testBackupKey,
-        new Uint8Array(),
-        { abortSignal: abortController.signal }
-      );
+      const result = svrB.restore(testBackupKey, new Uint8Array(), {
+        abortSignal: abortController.signal,
+      });
       assert.instanceOf(result, Promise);
       result.catch(() => {});
     });
@@ -77,10 +89,21 @@ describe('SecureValueRecoveryBackup', () => {
         this.skip();
       }
     });
+    afterEach(async function () {
+      if (this.currentTest && !this.currentTest.isPending()) {
+        try {
+          await svrB.remove();
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.log(e);
+        }
+      }
+    });
 
     it('completes full backup and restore flow with previous secret data', async () => {
       // First backup without previous data
-      const firstResponse = await svrB.storeBackup(testBackupKey, undefined);
+      const initialSecretData = svrB.createNewBackupChain(testBackupKey);
+      const firstResponse = await svrB.store(testBackupKey, initialSecretData);
       assert.exists(firstResponse);
       const {
         nextBackupSecretData: firstNextSecretData,
@@ -92,15 +115,15 @@ describe('SecureValueRecoveryBackup', () => {
       assert.instanceOf(firstNextSecretData, Uint8Array);
       assert.isNotEmpty(firstNextSecretData);
 
-      const restoredFirstToken = await svrB.fetchForwardSecrecyTokenFromServer(
-        testBackupKey,
-        firstMetadata
+      const restoredFirst = await svrB.restore(testBackupKey, firstMetadata);
+
+      assert.deepEqual(
+        firstToken.serialize(),
+        restoredFirst.forwardSecrecyToken.serialize()
       );
 
-      assert.deepEqual(firstToken.serialize(), restoredFirstToken.serialize());
-
       // Second backup with previous secret data
-      const secondResponse = await svrB.storeBackup(
+      const secondResponse = await svrB.store(
         testBackupKey,
         firstNextSecretData
       );
@@ -112,18 +135,18 @@ describe('SecureValueRecoveryBackup', () => {
       // Should also have next secret data for future backups
       assert.isNotEmpty(secondResponse.nextBackupSecretData);
 
-      const restoredSecondToken = await svrB.fetchForwardSecrecyTokenFromServer(
+      const restoredSecond = await svrB.restore(
         testBackupKey,
         secondResponse.metadata
       );
 
       assert.deepEqual(
         secondToken.serialize(),
-        restoredSecondToken.serialize()
+        restoredSecond.forwardSecrecyToken.serialize()
       );
 
       // The tokens should be different between backups
       assert.notDeepEqual(firstToken.serialize(), secondToken.serialize());
-    });
+    }).timeout(10000);
   });
 });
