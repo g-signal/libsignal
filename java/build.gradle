@@ -22,7 +22,7 @@ repositories {
 }
 
 allprojects {
-    version = "0.80.3"
+    version = "0.81.1"
     group   = "io.github.wanggenlin"
 
     tasks.withType(JavaCompile) {
@@ -191,7 +191,7 @@ spotless {
         }.inject(files()) { collected, next ->
             collected + next.sources
         }
-        targetExclude('**/Native.kt', '**/NativeTesting.kt')
+        targetExclude('**/Native.kt', '**/NativeTesting.kt', '**/org/rustls/**')
         ktlint()
     }
     java {
