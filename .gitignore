@@ -36,3 +36,5 @@ java/server/src/main/resources/*.dll
 Brewfile.lock.json
 
 __pycache__
+
+CUSTOM_CHANGES.md
