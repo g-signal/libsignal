@@ -78,6 +78,10 @@ USER root
 RUN apt-get install -y clang cmake crossbuild-essential-arm64 git python3
 USER libsignal
 
-RUN cargo install dump_syms --version 2.2.2 --no-default-features --features cli --locked
+RUN cargo install dump_syms \
+    --version 2.2.1 \
+    --no-default-features \
+    --features cli \
+    --locked
 
 CMD [ "/bin/bash" ]
