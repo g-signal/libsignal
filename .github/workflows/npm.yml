@@ -27,11 +27,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-15]
+        os: [windows-latest, macos-15]
         include:
         - os: macos-15
           rust-cross-target: x86_64-apple-darwin
-        - os: windows-2019
+        - os: windows-latest
           rust-cross-target: aarch64-pc-windows-msvc
         # Ubuntu binaries are built using Docker, below
 
