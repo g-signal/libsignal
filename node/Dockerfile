@@ -78,6 +78,12 @@ USER root
 RUN apt-get install -y clang cmake crossbuild-essential-arm64 git python3
 USER libsignal
 
-RUN cargo install dump_syms --version 2.2.2 --no-default-features --features cli --locked
+# Install dump_syms using stable Rust to avoid nightly feature gate incompatibilities.
+# (dump_syms is a build-time CLI tool; it doesn't need to share the project's nightly toolchain.)
+RUN rustup install stable && \
+    cargo +stable install dump_syms \
+        --no-default-features \
+        --features cli \
+        --locked
 
 CMD [ "/bin/bash" ]
