@@ -81,6 +81,12 @@ jobs:
       with:
         node-version-file: '.nvmrc'
 
+    - name: (Windows ARM64) Setup MSVC for ARM64 cross-compile
+      if: startsWith(matrix.os, 'windows')
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: amd64_arm64
+
     - name: Build for arm64
       run: npm run build -- --arch arm64 --copy-to-prebuilds
       working-directory: node
@@ -89,6 +95,12 @@ jobs:
       run: mv build/Release/*-debuginfo.* .
       working-directory: node
       shell: bash
+
+    - name: (Windows x64) Reset MSVC to x64 native
+      if: startsWith(matrix.os, 'windows')
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: amd64
 
     - name: Build for x64
       run: npm run build -- --arch x64 --copy-to-prebuilds
