@@ -5,7 +5,7 @@
 
 Pod::Spec.new do |s|
   s.name             = 'LibSignalClient'
-  s.version          = '0.81.1-BA'
+  s.version          = '0.81.2-BA'
   s.summary          = 'A Swift wrapper library for communicating with the Signal messaging service.'
 
   s.homepage         = 'https://github.com/g-signal/libsignal'
