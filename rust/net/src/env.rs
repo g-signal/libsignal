@@ -256,6 +256,12 @@ pub(crate) const ENDPOINT_PARAMS_SVR2_2026Q1_STAGING: EndpointParams<'static, Sv
         raft_config: attest::constants::RAFT_CONFIG_SVR2_2026Q1_STAGING,
     };
 
+pub(crate) const ENDPOINT_PARAMS_SVR2_2025Q3_STAGING: EndpointParams<'static, SvrSgx> =
+    EndpointParams {
+        mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVR2_2025Q3_STAGING),
+        raft_config: attest::constants::RAFT_CONFIG_SVR2_2025Q3_STAGING,
+    };
+
 pub(crate) const ENDPOINT_PARAMS_SVRB_2025Q3_STAGING: EndpointParams<'static, SvrSgx> =
     EndpointParams {
         mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVRB_2025Q3_STAGING),
