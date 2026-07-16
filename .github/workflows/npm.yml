@@ -229,6 +229,8 @@ jobs:
 
     - run: npm publish --tag '${{ inputs.npm_tag || 'latest' }}' --access public ${{ inputs.dry_run && '--dry-run' || ''}}
       working-directory: node
+      env:
+        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # This step is expected to fail if not run on a tag.
     - name: Upload debug info to release

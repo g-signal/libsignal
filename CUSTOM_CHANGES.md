@@ -226,6 +226,7 @@ RUN rustup install stable && \
 - `dryRun`：保持 `${{ inputs.dry_run || false }}`
 - `cargo install dump_syms` 保留 `--locked`
 - `npm publish --tag`：保持 `'${{ inputs.npm_tag || 'latest' }}'`
+- `npm publish` 步骤：保留 `env: NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`（上游用 OIDC，我们用 NPM_TOKEN secret）
 - 移除上游的 `Update npm` 步骤（`npm install -g npm@latest`）：npm@latest（12.x）有 `promise-retry` 模块缺失 bug，runner 自带 npm 版本已够用
 
 ---
