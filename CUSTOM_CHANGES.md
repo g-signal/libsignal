@@ -179,7 +179,7 @@ RUN rustup install stable && \
 以下是我们独有的改动，上游升级时需保留：
 
 - 触发器：保留 `push: tags: 'v*'`
-- `runs-on`: 保持 `macos-14`，**不随上游升级**（`macos-15-xlarge` 等 xlarge 规格需要付费账户，会导致 job 无法启动）
+- `runs-on`: 保持 `macos-14`（见顶部 Runner 规格原则）
 - `dryRun` 判断：保持 `'${{ inputs.dry_run }}' === 'true'`（上游是直接展开布尔值）
 - `brew install` 包含 `cmake go perl`
 - 步骤 `Set build environment`：设置 `IPHONEOS_DEPLOYMENT_TARGET`、`DEVELOPER_DIR`、`BORING_BSSL_SOURCE_REPLACE`
@@ -209,3 +209,23 @@ RUN rustup install stable && \
 - `dryRun`：保持 `${{ inputs.dry_run || false }}`
 - `cargo install dump_syms` 保留 `--locked`
 - `npm publish --tag`：保持 `'${{ inputs.npm_tag || 'latest' }}'`
+
+---
+
+## 14. `.github/workflows/build_and_test.yml`
+
+- matrix `os` 中：`ubuntu-latest-4-cores` → `ubuntu-latest`，`windows-latest-4-cores` → `windows-latest`，`macos-15-xlarge` → `macos-14`（见顶部 Runner 规格原则）
+
+---
+
+## 15. `.github/workflows/android_integration.yml`
+
+- `runs-on`: `ubuntu-latest-8-cores` → `ubuntu-latest`（见顶部 Runner 规格原则）
+
+---
+
+## 16. `.github/workflows/slow_tests.yml`
+
+- 所有付费 runner 替换为免费规格（见顶部 Runner 规格原则）
+- `ios_runner` 输入参数默认值：`macos-15-xlarge` → `macos-14`
+- `bigger_workers` 动态表达式全部展开为 `ubuntu-latest`
