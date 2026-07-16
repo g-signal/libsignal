@@ -137,6 +137,8 @@ const SIGNAL_DOMAIN_SUFFIX: &str = ".imba-test.com";  // 上游是 ".signal.org"
 ## 7. `java/build.gradle`
 
 - `group`: 保持 `"io.github.wanggenlin"`（上游是 `"org.signal"`）
+- `plugins` 块：保留 `id "io.github.gradle-nexus.publish-plugin" version "2.0.0"`（上游没有此插件）
+- 发布目标：保持 `nexusPublishing { repositories { sonatype { ... } } }`，**移除上游的 `subprojects { ... SignalBuildArtifacts / GCS ... }` 块**
 - `setUpSigningKey` 函数：保留 PGP 签名诊断日志 + 短格式/长格式 Key ID 兼容逻辑（try/catch 两次尝试）
 
 ---
