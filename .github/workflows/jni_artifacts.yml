@@ -24,10 +24,10 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest-8-cores, macos-15-xlarge]
+        os: [windows-latest, macos-14]
         include:
-          - os: windows-latest-8-cores
-          - os: macos-15-xlarge
+          - os: windows-latest
+          - os: macos-14
             additional-rust-target: x86_64-apple-darwin
         # Ubuntu binaries are built using Docker, below
 
