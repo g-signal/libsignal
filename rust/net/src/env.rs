@@ -250,12 +250,6 @@ pub(crate) const ENDPOINT_PARAMS_CDSI_STAGING: EndpointParams<'static, Cdsi> = E
     raft_config: (),
 };
 
-pub(crate) const ENDPOINT_PARAMS_SVR2_2026Q1_STAGING: EndpointParams<'static, SvrSgx> =
-    EndpointParams {
-        mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVR2_2026Q1_STAGING),
-        raft_config: attest::constants::RAFT_CONFIG_SVR2_2026Q1_STAGING,
-    };
-
 pub(crate) const ENDPOINT_PARAMS_SVR2_2025Q3_STAGING: EndpointParams<'static, SvrSgx> =
     EndpointParams {
         mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVR2_2025Q3_STAGING),
@@ -266,12 +260,6 @@ pub(crate) const ENDPOINT_PARAMS_SVRB_2025Q3_STAGING: EndpointParams<'static, Sv
     EndpointParams {
         mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVRB_2025Q3_STAGING),
         raft_config: attest::constants::RAFT_CONFIG_SVRB_2025Q3_STAGING,
-    };
-
-pub(crate) const ENDPOINT_PARAMS_SVRB_2026Q1_STAGING: EndpointParams<'static, SvrSgx> =
-    EndpointParams {
-        mr_enclave: MrEnclave::new(attest::constants::ENCLAVE_ID_SVRB_2026Q1_STAGING),
-        raft_config: attest::constants::RAFT_CONFIG_SVRB_2026Q1_STAGING,
     };
 
 pub(crate) const ENDPOINT_PARAMS_SVR2_2025Q3_PROD: EndpointParams<'static, SvrSgx> =
