@@ -128,7 +128,7 @@ jobs:
   build-docker:
     name: Build (Ubuntu via Docker)
 
-    runs-on: ubuntu-latest-8-cores
+    runs-on: ubuntu-latest
 
     timeout-minutes: 45
 

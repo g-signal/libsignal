@@ -35,7 +35,7 @@ on:
 jobs:
   java-docker:
     name: Java (Docker)
-    runs-on: ${{ inputs.bigger_workers == true && 'ubuntu-latest-8-cores' || 'ubuntu-latest-4-cores' }}
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 60
 
@@ -71,7 +71,7 @@ jobs:
 
   java-docker-secondary:
     name: Java (Secondary Docker)
-    runs-on: ${{ inputs.bigger_workers == true && 'ubuntu-latest-8-cores' || 'ubuntu-latest-4-cores' }}
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 60
 
@@ -127,7 +127,7 @@ jobs:
 
   java-extra-bridging-checks:
     name: Java with runtime bridging checks
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 60
 
@@ -147,7 +147,7 @@ jobs:
   android-emulator-tests:
     name: Android Emulator Tests
     # For hardware acceleration; see https://github.blog/changelog/2023-02-23-hardware-accelerated-android-virtualization-on-actions-windows-and-linux-larger-hosted-runners/
-    runs-on: ${{ inputs.bigger_workers == true && 'ubuntu-latest-8-cores' || 'ubuntu-latest-4-cores' }}
+    runs-on: ubuntu-latest
     env:
       # Proxy server tests will fail on Android API prior to 28
       LIBSIGNAL_TESTING_PROXY_SERVER: ${{ fromJSON(matrix.api_level) >= 28 && secrets.LIBSIGNAL_TESTING_PROXY_SERVER || '' }}
@@ -246,7 +246,7 @@ jobs:
 
   aarch64:
     name: AArch64 Linux Tests
-    runs-on: ubuntu-24.04-arm64-4-cores
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 60
 
@@ -273,7 +273,7 @@ jobs:
 
   node-docker:
     name: Node (Ubuntu via Docker)
-    runs-on: ${{ inputs.bigger_workers == true && 'ubuntu-latest-4-cores' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
 
@@ -298,7 +298,7 @@ jobs:
 
   node-docker-secondary:
     name: Node (Secondary Ubuntu via Docker)
-    runs-on: ${{ inputs.bigger_workers == true && 'ubuntu-latest-4-cores' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
 
@@ -364,7 +364,7 @@ jobs:
 
   swift-cocoapod:
     name: Swift CocoaPod (all architectures)
-    runs-on: ${{ inputs.ios_runner || 'macos-15-xlarge' }}
+    runs-on: ${{ inputs.ios_runner || 'macos-14' }}  # 不升级，xlarge 需要付费账户
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
 
@@ -421,7 +421,7 @@ jobs:
 
   rust-stable-testing:
     name: Rust tests (using latest stable)
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
 
@@ -491,7 +491,7 @@ jobs:
 
   rust-fuzzing:
     name: Rust fuzzing
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
     if: ${{ github.event_name != 'schedule' || (github.repository_owner == 'signalapp' && endsWith(github.repository, '-private')) }}
     timeout-minutes: 45
 

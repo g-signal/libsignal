@@ -17,8 +17,15 @@ git diff <new-tag> HEAD -- \
   node/Dockerfile \
   .github/workflows/ios_artifacts.yml \
   .github/workflows/jni_artifacts.yml \
-  .github/workflows/npm.yml
+  .github/workflows/npm.yml \
+  .github/workflows/build_and_test.yml \
+  .github/workflows/android_integration.yml \
+  .github/workflows/slow_tests.yml
 ```
+
+> **Runner 规格原则（所有 workflow 通用）**：付费 larger runner 一律替换为免费规格，上游升级时不跟随：
+> - `ubuntu-latest-4-cores` / `ubuntu-latest-8-cores` / `ubuntu-24.04-arm64-4-cores` → `ubuntu-latest`
+> - `macos-15-xlarge` 等 xlarge 规格 → `macos-14`
 
 > **注意**：上游重构有时会重命名常量（如 `ENCLAVE_ID_SVR2_STAGING` → `ENCLAVE_ID_SVR2_2025Q3_STAGING`）。
 > 冲突时不能直接接受上游（`git checkout --theirs`），必须把自定义值迁移到新常量名上。
