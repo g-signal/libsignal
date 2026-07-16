@@ -137,8 +137,20 @@ const SIGNAL_DOMAIN_SUFFIX: &str = ".imba-test.com";  // 上游是 ".signal.org"
 ## 7. `java/build.gradle`
 
 - `group`: 保持 `"io.github.wanggenlin"`（上游是 `"org.signal"`）
-- `plugins` 块：保留 `id "io.github.gradle-nexus.publish-plugin" version "2.0.0"`（上游没有此插件）
-- 发布目标：保持 `nexusPublishing { repositories { sonatype { ... } } }`，**移除上游的 `subprojects { ... SignalBuildArtifacts / GCS ... }` 块**
+- `plugins` 块：保留 `id "io.github.gradle-nexus.publish-plugin" version "2.0.0"`，**移除上游的 `import org.gradle.api.publish.PublishingExtension`**
+- 发布目标：保持以下 `nexusPublishing` 块，**移除上游的 `subprojects { ... SignalBuildArtifacts/GCS ... }` 块**：
+  ```groovy
+  nexusPublishing {
+      repositories {
+          sonatype {
+              username = project.findProperty('sonatypeUsername') ?: ""
+              password = project.findProperty('sonatypePassword') ?: ""
+              nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+              snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+          }
+      }
+  }
+  ```
 - `setUpSigningKey` 函数：保留 PGP 签名诊断日志 + 短格式/长格式 Key ID 兼容逻辑（try/catch 两次尝试）
 
 ---
@@ -147,6 +159,8 @@ const SIGNAL_DOMAIN_SUFFIX: &str = ".imba-test.com";  // 上游是 ".signal.org"
 
 - `.PHONY` 包含 `test_signing`
 - `GRADLE_OPTIONS` 包含 `--stacktrace`
+- `publish_java` docker run 传入的环境变量：包含 `sonatypeUsername`、`sonatypePassword`、`signingKeyId`、`signingPassword`、`signingKey`，**不含 `CLOUDSDK_AUTH_ACCESS_TOKEN`**
+- `publish_java` gradlew 命令：`publish closeAndReleaseStagingRepositories`（不能只有 `publish`）
 - `publish_java` target 前有环境变量诊断输出
 - 存在 `test_signing` target
 
