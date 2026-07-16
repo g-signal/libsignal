@@ -25,7 +25,7 @@ jobs:
       # Needed for google-github-actions/auth.
       id-token: 'write'
 
-    runs-on: macos-15-xlarge
+    runs-on: macos-14  # 不升级到 macos-15-xlarge，该规格需要付费账户
 
     timeout-minutes: 45
 
