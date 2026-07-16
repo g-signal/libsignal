@@ -214,6 +214,7 @@ RUN rustup install stable && \
 - `make publish_java` 触发条件：保持 `github.ref_type == 'tag'`（上游是 `!inputs.dry_run`）
 - `publish_java` 使用 sonatype 发布（无 GCP auth），env 包含 `SONATYPE_USER`、`SONATYPE_PASSWORD`、`SIGNING_KEYID`、`SIGNING_PASSWORD`、`SIGNING_KEY`
 - dry_run 相关步骤条件：`github.event_name == 'workflow_dispatch' && inputs.dry_run`
+- `publish` job：checkout 后加 `Free disk space` 步骤（免费 runner 磁盘不足，删除 dotnet/android/ghc/CodeQL 和 Docker 镜像缓存）
 
 ---
 
@@ -225,6 +226,7 @@ RUN rustup install stable && \
 - `dryRun`：保持 `${{ inputs.dry_run || false }}`
 - `cargo install dump_syms` 保留 `--locked`
 - `npm publish --tag`：保持 `'${{ inputs.npm_tag || 'latest' }}'`
+- 移除上游的 `Update npm` 步骤（`npm install -g npm@latest`）：npm@latest（12.x）有 `promise-retry` 模块缺失 bug，runner 自带 npm 版本已够用
 
 ---
 

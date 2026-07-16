@@ -210,9 +210,6 @@ jobs:
         path: debuginfo
         merge-multiple: true
 
-    - name: Update npm
-      run: npm install -g npm@latest
-
     - run: npm ci
       working-directory: node
 
