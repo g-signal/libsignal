@@ -48,6 +48,8 @@ git diff <new-tag> HEAD -- \
 | `DOMAIN_CONFIG_SVR2_STAGING.connect.hostname` | `svr2.imba-test.com` |
 | `DOMAIN_CONFIG_SVRB_PROD.connect.hostname` | `svrb.ba-chat.com` |
 | `DOMAIN_CONFIG_SVRB_STAGING.connect.hostname` | `svrb.imba-test.com` |
+| `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2.connect.hostname` | `grpc.ba-chat.com` |
+| `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING.connect.hostname` | `grpc.imba-test.com` |
 
 **IP 地址**（prod 的 3 个清空，staging 保持上游原值不动）：
 
@@ -68,6 +70,8 @@ git diff <new-tag> HEAD -- \
 | `DOMAIN_CONFIG_SVR2.connect.cert` | `RootCertificates::Native` |
 | `DOMAIN_CONFIG_SVR2_STAGING.connect.cert` | `RootCertificates::Native` |
 | `DOMAIN_CONFIG_SVRB_STAGING.connect.cert` | `RootCertificates::Native` |
+| `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2.connect.cert` | `RootCertificates::Native` |
+| `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING.connect.cert` | `RootCertificates::Native` |
 | `DOMAIN_CONFIG_SVRB_PROD.connect.cert` | 保持 `SIGNAL_ROOT_CERTIFICATES`（该常量 include_bytes! 指向已替换的 `signal.cer`） |
 
 ---

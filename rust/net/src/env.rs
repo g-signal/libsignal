@@ -59,9 +59,9 @@ const DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2: DomainConfig = DomainConfig {
     ip_v4: &[],
     ip_v6: &[],
     connect: ConnectionConfig {
-        hostname: "grpc.chat.signal.org",
+        hostname: "grpc.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
-        cert: SIGNAL_ROOT_CERTIFICATES,
+        cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
         http_version: Some(HttpVersion::Http2),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
@@ -97,9 +97,9 @@ const DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING: DomainConfig = DomainConfig {
     ip_v4: &[],
     ip_v6: &[],
     connect: ConnectionConfig {
-        hostname: "grpc.chat.staging.signal.org",
+        hostname: "grpc.imba-test.com",
         port: DEFAULT_HTTPS_PORT,
-        cert: SIGNAL_ROOT_CERTIFICATES,
+        cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
         http_version: Some(HttpVersion::Http2),
         confirmation_header_name: Some(TIMESTAMP_HEADER_NAME),
