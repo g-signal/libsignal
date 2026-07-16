@@ -151,7 +151,19 @@ const SIGNAL_DOMAIN_SUFFIX: &str = ".imba-test.com";  // 上游是 ".signal.org"
 
 ## 10. `node/Dockerfile`
 
-- `cargo install dump_syms` 保留 `--locked` 参数
+`dump_syms` 安装方式替换（避免 nightly feature gate 不兼容）：
+
+```dockerfile
+# 上游：
+RUN cargo install dump_syms --no-default-features --features cli
+
+# 自定义：
+RUN rustup install stable && \
+    cargo +stable install dump_syms \
+        --no-default-features \
+        --features cli \
+        --locked
+```
 
 ---
 
