@@ -38,6 +38,12 @@ git diff <new-tag> HEAD -- \
 
 **其他注意**：`DOMAIN_CONFIG_SVRB_PROD.connect.proxy.configs` 保持 `[PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G]`（上游是 `PROXY_CONFIG_F_PROD`，我们没有 prod proxy，所以用 staging proxy）
 
+**EndpointParams 规则**：
+- 必须保留 `ENDPOINT_PARAMS_SVR2_2025Q3_STAGING`（引用我们自定义的 `ENCLAVE_ID_SVR2_2025Q3_STAGING`），上游可能没有这个常量，需要手动补充
+- 上游新增的 `ENDPOINT_PARAMS_SVR2_2026Q1_STAGING` / `ENDPOINT_PARAMS_SVRB_2026Q1_STAGING` 不被我们使用，如果上游保留则会产生 unused warning 编译错误，需要删除
+- STAGING 环境使用 `ENDPOINT_PARAMS_SVR2_2025Q3_STAGING` 和 `ENDPOINT_PARAMS_SVRB_2025Q3_STAGING`
+- PROD 环境使用 `ENDPOINT_PARAMS_SVR2_2025Q3_PROD` 和 `ENDPOINT_PARAMS_SVRB_2025Q3_PROD`
+
 **域名**（所有 `*.signal.org` 替换，上游升级时此规则不变）：
 
 | 常量 | 自定义值 |
