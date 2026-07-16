@@ -14,8 +14,9 @@ fn main() {
         "proto/org/signal/chat/profile.proto",
     ];
 
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(false)
+        .build_transport(false)
         .compile_protos(SERVICE_PROTOS, &["proto/"])
         .unwrap_or_else(|e| panic!("{e}"));
 }

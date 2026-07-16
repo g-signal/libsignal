@@ -23,7 +23,7 @@ use crate::{
     IdentityKeyStore, KeyPair, KyberPreKeyStore, PreKeySignalMessage, PreKeyStore, PrivateKey,
     ProtocolAddress, PublicKey, Result, ServiceId, ServiceIdFixedWidthBinaryBytes, SessionRecord,
     SessionStore, SignalMessage, SignalProtocolError, SignedPreKeyStore, Timestamp, crypto,
-    message_encrypt, proto, ratchet, session_cipher,
+    message_encrypt, proto, session_cipher,
 };
 
 #[derive(Debug, Clone)]
@@ -701,7 +701,7 @@ mod sealed_sender_v1 {
     #[cfg(test)]
     use std::fmt;
 
-    use zerocopy::IntoBytes;
+    use libsignal_core::derive_arrays;
 
     use super::*;
 
@@ -732,15 +732,11 @@ mod sealed_sender_v1 {
             .concat();
 
             let shared_secret = our_keys.private_key.calculate_agreement(their_public)?;
-            #[derive(Default, KnownLayout, IntoBytes, FromBytes)]
-            #[repr(C, packed)]
-            struct DerivedValues([u8; 32], [u8; 32], [u8; 32]);
-            let mut derived_values = DerivedValues::default();
-            hkdf::Hkdf::<sha2::Sha256>::new(Some(&ephemeral_salt), &shared_secret)
-                .expand(&[], derived_values.as_mut_bytes())
-                .expect("valid output length");
-
-            let DerivedValues(chain_key, cipher_key, mac_key) = derived_values;
+            let (chain_key, cipher_key, mac_key) = derive_arrays(|bytes| {
+                hkdf::Hkdf::<sha2::Sha256>::new(Some(&ephemeral_salt), &shared_secret)
+                    .expand(&[], bytes)
+                    .expect("valid output length")
+            });
 
             Ok(Self {
                 chain_key,
@@ -794,15 +790,11 @@ mod sealed_sender_v1 {
             // 96 bytes are derived, but the first 32 are discarded/unused. This is intended to
             // mirror the way the EphemeralKeys are derived, even though StaticKeys does not end up
             // requiring a third "chain key".
-            #[derive(Default, KnownLayout, IntoBytes, FromBytes)]
-            #[repr(C, packed)]
-            struct DerivedValues(#[allow(unused)] [u8; 32], [u8; 32], [u8; 32]);
-            let mut derived_values = DerivedValues::default();
-            hkdf::Hkdf::<sha2::Sha256>::new(Some(&salt), &shared_secret)
-                .expand(&[], derived_values.as_mut_bytes())
-                .expect("valid output length");
-
-            let DerivedValues(_, cipher_key, mac_key) = derived_values;
+            let (_, cipher_key, mac_key) = derive_arrays::<32, 32, 32>(|bytes| {
+                hkdf::Hkdf::<sha2::Sha256>::new(Some(&salt), &shared_secret)
+                    .expand(&[], bytes)
+                    .expect("valid output length")
+            });
 
             Ok(Self {
                 cipher_key,
@@ -2009,7 +2001,6 @@ pub async fn sealed_sender_decrypt(
     pre_key_store: &mut dyn PreKeyStore,
     signed_pre_key_store: &dyn SignedPreKeyStore,
     kyber_pre_key_store: &mut dyn KyberPreKeyStore,
-    use_pq_ratchet: ratchet::UsePQRatchet,
 ) -> Result<SealedSenderDecryptionResult> {
     let usmc = sealed_sender_decrypt_to_usmc(ciphertext, identity_store).await?;
 
@@ -2060,7 +2051,6 @@ pub async fn sealed_sender_decrypt(
                 signed_pre_key_store,
                 kyber_pre_key_store,
                 &mut rng,
-                use_pq_ratchet,
             )
             .await?
         }

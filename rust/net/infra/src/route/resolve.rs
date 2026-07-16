@@ -17,8 +17,8 @@ use crate::dns::{DnsError, DnsResolver};
 use crate::host::Host;
 use crate::route::{
     ConnectionProxyRoute, DirectOrProxyRoute, HttpProxyRouteFragment, HttpsProxyRoute,
-    HttpsTlsRoute, NoiseRoute, ProxyTarget, SocksRoute, TcpRoute, TlsRoute, UdpRoute,
-    UnresolvedHost, UsePreconnect, WebSocketRoute,
+    HttpsTlsRoute, ProxyTarget, SocksRoute, TcpRoute, TlsRoute, UdpRoute, UnresolvedHost,
+    UsePreconnect, WebSocketRoute,
 };
 
 /// A route with hostnames that can be resolved.
@@ -208,7 +208,7 @@ macro_rules! impl_resolve_hostnames {
     }
 }
 
-impl_resolve_hostnames!(TcpRoute, address, port);
+impl_resolve_hostnames!(TcpRoute, address, port, override_nagle_algorithm);
 impl_resolve_hostnames!(TlsRoute, inner, fragment);
 impl_resolve_hostnames!(HttpsTlsRoute, inner, fragment);
 impl_resolve_hostnames!(WebSocketRoute, inner, fragment);
@@ -366,20 +366,6 @@ impl<A: ResolveHostnames> ProxyTarget<A> {
     }
 }
 
-impl<A: ResolveHostnames, N> ResolveHostnames for NoiseRoute<N, A> {
-    type Resolved = NoiseRoute<N, A::Resolved>;
-    fn hostnames(&self) -> impl Iterator<Item = &UnresolvedHost> {
-        self.inner.hostnames()
-    }
-    fn resolve(self, lookup: impl FnMut(&str) -> IpAddr) -> Self::Resolved {
-        let Self { inner, fragment } = self;
-        Self::Resolved {
-            inner: inner.resolve(lookup),
-            fragment,
-        }
-    }
-}
-
 macro_rules! impl_resolved_route {
     ($typ:ident, $delegate_field:ident) => {
         impl<A: ResolvedRoute> ResolvedRoute for $typ<A> {
@@ -445,12 +431,6 @@ impl<L: ResolvedRoute, R: ResolvedRoute> ResolvedRoute for Either<L, R> {
                 ResolvedRoute::immediate_target,
             )
             .into_inner()
-    }
-}
-
-impl<N, A: ResolvedRoute> ResolvedRoute for NoiseRoute<N, A> {
-    fn immediate_target(&self) -> &IpAddr {
-        self.inner.immediate_target()
     }
 }
 
@@ -524,6 +504,7 @@ mod test {
     use nonzero_ext::nonzero;
 
     use super::*;
+    use crate::OverrideNagleAlgorithm;
     use crate::certs::RootCertificates;
     use crate::host::Host;
     use crate::route::resolve::testutils::{FakeResolver, FakeResponder};
@@ -697,6 +678,7 @@ mod test {
         let http_fragment = HttpRouteFragment {
             host_header: "target-domain".into(),
             path_prefix: "".into(),
+            http_version: None,
             front_name: None,
         };
 
@@ -712,6 +694,7 @@ mod test {
                 proxy: TcpRoute {
                     address: proxy,
                     port: PROXY_PORT,
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
                 target_addr: ProxyTarget::ResolvedLocally(target),
                 target_port: TARGET_PORT,

@@ -4,12 +4,14 @@
 //
 
 import { assert } from 'chai';
+import { Buffer } from 'node:buffer';
+
 import {
   Recipient,
   default as SealedSenderMultiRecipientMessage,
-} from '../SealedSenderMultiRecipientMessage';
-import * as util from './util';
-import { assertArrayEquals } from './util';
+} from '../SealedSenderMultiRecipientMessage.js';
+import * as util from './util.js';
+import { assertArrayEquals } from './util.js';
 
 util.initLogger();
 

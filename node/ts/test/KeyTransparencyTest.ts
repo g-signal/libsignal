@@ -3,21 +3,28 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../../Native';
 import { config, expect, use } from 'chai';
-import * as chaiAsPromised from 'chai-as-promised';
-import * as util from './util';
-import { UnauthenticatedChatConnection, Environment, Net } from '../net';
-import { Aci } from '../Address';
-import { PublicKey } from '../EcKeys';
+import chaiAsPromised from 'chai-as-promised';
+import { Buffer } from 'node:buffer';
+
+import * as Native from '../Native.js';
+import * as util from './util.js';
+import {
+  UnauthenticatedChatConnection,
+  Environment,
+  Net,
+  TokioAsyncContext,
+} from '../net.js';
+import { Aci } from '../Address.js';
+import { PublicKey } from '../EcKeys.js';
 import {
   ErrorCode,
   KeyTransparencyError,
   KeyTransparencyVerificationFailed,
   LibSignalErrorBase,
-} from '../Errors';
-import * as KT from '../net/KeyTransparency';
-import { MonitorMode } from '../net/KeyTransparency';
+} from '../Errors.js';
+import * as KT from '../net/KeyTransparency.js';
+import { MonitorMode } from '../net/KeyTransparency.js';
 
 use(chaiAsPromised);
 
@@ -84,12 +91,61 @@ describe('KeyTransparency bridging', () => {
   });
 });
 
+describe('KeyTransparency network errors', () => {
+  it('can bridge network errors', async () => {
+    async function run(statusCode: number, headers: string[] = []) {
+      const tokio = new TokioAsyncContext(Native.TokioAsyncContext_new());
+      const [unauth, remote] = UnauthenticatedChatConnection.fakeConnect(
+        tokio,
+        {
+          onConnectionInterrupted: () => {},
+          onIncomingMessage: () => {},
+          onReceivedAlerts: () => {},
+          onQueueEmpty: () => {},
+        }
+      );
+      const client = new KT.ClientImpl(
+        tokio,
+        unauth._chatService,
+        Environment.Staging
+      );
+      const promise = client._getLatestDistinguished(new InMemoryKtStore(), {});
+
+      const request = await remote.assertReceiveIncomingRequest();
+
+      remote.sendReplyTo(request, {
+        status: statusCode,
+        headers: headers,
+      });
+      return promise;
+    }
+
+    // 429 without a retry-after header is a generic error
+    await expect(run(429)).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.IoError
+    );
+    await expect(
+      run(429, ['retry-after: 42'])
+    ).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.RateLimitedError
+    );
+    await expect(run(500)).to.be.rejected.and.eventually.have.property(
+      'code',
+      ErrorCode.IoError
+    );
+  });
+});
+
 describe('KeyTransparency Integration', function (this: Mocha.Suite) {
   // Avoid timing out due to slow network or KT environment
   this.timeout(5000);
 
   before(() => {
-    if (!process.env.LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS) {
+    const ignoreKtTests =
+      typeof process.env.LIBSIGNAL_TESTING_IGNORE_KT_TESTS !== 'undefined';
+    if (!process.env.LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS || ignoreKtTests) {
       this.ctx.skip();
     }
   });
@@ -122,12 +178,14 @@ describe('KeyTransparency Integration', function (this: Mocha.Suite) {
     await kt.search(testRequest, store, {});
 
     const accountDataHistory = store.storage.get(testAci) ?? null;
-    expect(accountDataHistory).to.not.be.null;
+    if (accountDataHistory === null) {
+      expect.fail('accountDataHistory is null');
+    }
 
-    expect(accountDataHistory!.length).to.equal(1);
+    expect(accountDataHistory.length).to.equal(1);
 
     await kt.monitor(testRequest, store, {});
-    expect(accountDataHistory!.length).to.equal(2);
+    expect(accountDataHistory.length).to.equal(2);
   });
 });
 

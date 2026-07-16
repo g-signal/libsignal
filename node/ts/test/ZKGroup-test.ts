@@ -4,6 +4,7 @@
 //
 
 import { assert } from 'chai';
+import { Buffer } from 'node:buffer';
 
 import {
   ServerSecretParams,
@@ -59,14 +60,14 @@ import {
   ReceiptCredentialResponse,
   BackupLevel,
   BackupCredentialType,
-} from '../zkgroup/';
-import { Aci, Pni } from '../Address';
-import { LibSignalErrorBase, Uuid } from '..';
+} from '../zkgroup/index.js';
+import { Aci, Pni } from '../Address.js';
+import { LibSignalErrorBase, Uuid } from '../index.js';
 import {
   assertArrayEquals,
   assertArrayNotEquals,
   assertByteArray,
-} from './util';
+} from './util.js';
 
 const SECONDS_PER_DAY = 86400;
 
@@ -402,7 +403,7 @@ describe('ZKGroup', () => {
     try {
       serverPublicParams.verifySignature(alteredMessage, signature);
       assert.fail('signature validation should have failed!');
-    } catch (error) {
+    } catch (_error) {
       // good
     }
   });

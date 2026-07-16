@@ -21,6 +21,7 @@ cargo fetch
 
 export CARGO_PROFILE_RELEASE_DEBUG=1 # Enable line tables
 RUSTFLAGS="--cfg aes_armv8 ${RUSTFLAGS:-}" # Enable ARMv8 cryptography acceleration when available
+RUSTFLAGS="--cfg tokio_unstable ${RUSTFLAGS:-}" # Access tokio's unstable metrics
 RUSTFLAGS="$(rust_remap_path_options) ${RUSTFLAGS:-}" # Strip absolute paths
 export RUSTFLAGS
 
@@ -187,10 +188,11 @@ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 
 # Use the Android NDK's prebuilt Clang+lld as pqcrypto's compiler and Rust's linker.
 ANDROID_TOOLCHAIN_DIR=$(echo "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt"/*/bin/)
-export CC_aarch64_linux_android="${ANDROID_TOOLCHAIN_DIR}/aarch64-linux-android21-clang"
-export CC_armv7_linux_androideabi="${ANDROID_TOOLCHAIN_DIR}/armv7a-linux-androideabi21-clang"
-export CC_x86_64_linux_android="${ANDROID_TOOLCHAIN_DIR}/x86_64-linux-android21-clang"
-export CC_i686_linux_android="${ANDROID_TOOLCHAIN_DIR}/i686-linux-android21-clang"
+ANDROID_MIN_SDK_VERSION=23
+export CC_aarch64_linux_android="${ANDROID_TOOLCHAIN_DIR}/aarch64-linux-android${ANDROID_MIN_SDK_VERSION}-clang"
+export CC_armv7_linux_androideabi="${ANDROID_TOOLCHAIN_DIR}/armv7a-linux-androideabi${ANDROID_MIN_SDK_VERSION}-clang"
+export CC_x86_64_linux_android="${ANDROID_TOOLCHAIN_DIR}/x86_64-linux-android${ANDROID_MIN_SDK_VERSION}-clang"
+export CC_i686_linux_android="${ANDROID_TOOLCHAIN_DIR}/i686-linux-android${ANDROID_MIN_SDK_VERSION}-clang"
 
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="${CC_aarch64_linux_android}"
 export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="${CC_armv7_linux_androideabi}"

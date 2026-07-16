@@ -7,6 +7,7 @@
 //! websocket, as implemented in [`libsignal_net::chat`].
 
 mod keytrans;
+mod messages;
 mod profiles;
 // TODO make this not pub(crate)
 pub(crate) mod registration;
@@ -26,6 +27,7 @@ use serde_with::serde_as;
 use crate::api::{
     ChallengeOption, DisconnectedError, RateLimitChallenge, RequestError, UserBasedAuthorization,
 };
+use crate::logging::DebugAsStrOrBytes;
 
 const ACCESS_KEY_HEADER_NAME: http::HeaderName =
     http::HeaderName::from_static("unidentified-access-key");
@@ -49,6 +51,9 @@ impl AsHttpHeader for UserBasedAuthorization {
         }
     }
 }
+
+/// Marker type for use in [`crate::api`] traits.
+pub enum OverWs {}
 
 /// An abstraction over [`chat::ChatConnection`].
 pub trait WsConnection: Sync {
@@ -141,6 +146,26 @@ pub(super) enum ResponseError {
 }
 impl LogSafeDisplay for ResponseError {}
 
+pub(crate) enum CustomError<E> {
+    NoCustomHandling,
+    Err(E),
+    Unexpected { log_safe: String },
+}
+
+impl<E> CustomError<E> {
+    /// A convenience method to be used with [`ResponseError::into_request_error`] that always
+    /// produces `NoCustomHandling`.
+    fn no_custom_handling(_: &chat::Response) -> Self {
+        Self::NoCustomHandling
+    }
+}
+
+impl<E> From<E> for CustomError<E> {
+    fn from(value: E) -> Self {
+        Self::Err(value)
+    }
+}
+
 impl ResponseError {
     /// Converts a `ResponseError` into a [`RequestError`] by calling `map_unrecognized` for any
     /// non-success status codes.
@@ -149,7 +174,7 @@ impl ResponseError {
     /// response codes (like 429 Too Many Requests).
     pub(crate) fn into_request_error<E, D>(
         self,
-        map_unrecognized: impl FnOnce(&chat::Response) -> Option<E>,
+        map_unrecognized: impl FnOnce(&chat::Response) -> CustomError<E>,
     ) -> RequestError<E, D> {
         match self {
             e @ (ResponseError::UnexpectedContentType(_)
@@ -162,8 +187,9 @@ impl ResponseError {
                 status: _,
                 response,
             } => match map_unrecognized(&response) {
-                Some(specific_error) => RequestError::Other(specific_error),
-                None => {
+                CustomError::Err(specific_error) => RequestError::Other(specific_error),
+                CustomError::Unexpected { log_safe } => RequestError::Unexpected { log_safe },
+                CustomError::NoCustomHandling => {
                     let chat::Response {
                         status,
                         message: _,
@@ -276,6 +302,7 @@ fn check_response_status(response: chat::Response) -> Result<chat::Response, Res
 }
 
 /// Like [`TryIntoResponse`], but without checking the status code first.
+#[expect(clippy::result_large_err)]
 fn parse_json_from_body<R>(response: &chat::Response) -> Result<R, ResponseError>
 where
     R: for<'a> serde::Deserialize<'a>,
@@ -299,16 +326,6 @@ where
         | serde_json::error::Category::Io
         | serde_json::error::Category::Eof => ResponseError::InvalidJson,
     })
-}
-
-struct DebugAsStrOrBytes<'b>(&'b [u8]);
-impl std::fmt::Debug for DebugAsStrOrBytes<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match std::str::from_utf8(self.0) {
-            Ok(s) => s.fmt(f),
-            Err(_) => hex::encode(self.0).fmt(f),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -360,7 +377,7 @@ mod testutil {
             _log_safe_path: &str,
             request: chat::Request,
         ) -> impl Future<Output = Result<chat::Response, chat::SendError>> + Send {
-            assert_eq!(self.expected, request);
+            pretty_assertions::assert_eq!(self.expected, request);
             std::future::ready(Ok(self.response.clone()))
         }
     }
@@ -410,7 +427,7 @@ mod test {
     ) -> Result<Empty, RequestError<std::convert::Infallible>> {
         input
             .try_into_response()
-            .map_err(|e| e.into_request_error(|_| None))
+            .map_err(|e| e.into_request_error(CustomError::no_custom_handling))
     }
 
     #[derive(Debug, serde::Deserialize)]
@@ -435,6 +452,6 @@ mod test {
     ) -> Result<Example, RequestError<std::convert::Infallible>> {
         input
             .try_into_response()
-            .map_err(|e| e.into_request_error(|_| None))
+            .map_err(|e| e.into_request_error(CustomError::no_custom_handling))
     }
 }

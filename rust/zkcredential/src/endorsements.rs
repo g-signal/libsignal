@@ -162,8 +162,7 @@ impl ClientDecryptionKey {
 }
 
 /// A set of endorsements issued by a server, along with the proof of their validity.
-#[derive(Serialize, Deserialize, PartialDefault)]
-#[cfg_attr(test, derive(Clone))]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct EndorsementResponse {
     // Don't eagerly decompress these.
     R: Vec<CompressedRistretto>,
@@ -375,7 +374,7 @@ impl EndorsementResponse {
         scalar_args.add("sk_prime", private_key.sk_prime);
         let proof = statement
             .prove(&scalar_args, &point_args, b"", &randomness)
-            .unwrap();
+            .expect("valid proof");
 
         EndorsementResponse { R, proof }
     }

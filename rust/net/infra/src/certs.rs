@@ -46,9 +46,9 @@ impl RootCertificates {
     ///
     /// **Warning:** If `self` is [`RootCertificates::Native`], the resulting connector will
     /// **depend on tokio** to verify certificates (using rustls-platform-verifier, isolated to a
-    /// blocking task thread). Moreover, when using the resulting [`boring::ssl::Ssl`] object, you
-    /// must call `set_task_waker`. This will be taken care of for you if you use tokio-boring (and
-    /// always poll within a tokio context).
+    /// blocking task thread). Moreover, when using the resulting [`Ssl`](boring_signal::ssl::Ssl)
+    /// object, you must call `set_task_waker`. This will be taken care of for you if you use
+    /// tokio-boring (and always poll within a tokio context).
     pub fn apply_to_connector(
         &self,
         connector: &mut SslConnectorBuilder,
@@ -367,14 +367,15 @@ mod test {
 
     use assert_matches::assert_matches;
     use boring_signal::ssl::{ErrorCode, SslConnector, SslMethod};
+    use boring_signal::x509::X509VerifyError;
     use rustls::RootCertStore;
     use tokio::net::TcpStream;
 
     use super::*;
     use crate::tcp_ssl::proxy::testutil::PROXY_CERTIFICATE;
     use crate::tcp_ssl::testutil::{
-        SERVER_CERTIFICATE, SERVER_HOSTNAME, localhost_https_server,
-        make_http_request_response_over,
+        SERVER_CERTIFICATE, SERVER_HOSTNAME, make_http_request_response_over,
+        simple_localhost_https_server,
     };
 
     struct AllowSync<T>(T);
@@ -405,7 +406,7 @@ mod test {
     async fn verify_certificate_via_rustls<V: LimitedServerCertVerifier + 'static>(
         make_verifier: fn(rustls::client::WebPkiServerVerifier) -> V,
     ) {
-        let (addr, server) = localhost_https_server();
+        let (addr, server) = simple_localhost_https_server();
         let _server_handle = tokio::spawn(server);
 
         let mut root_cert_store = RootCertStore::empty();
@@ -442,7 +443,7 @@ mod test {
     async fn verify_certificate_failure_via_rustls<V: LimitedServerCertVerifier + 'static>(
         make_verifier: fn(rustls::client::WebPkiServerVerifier) -> V,
     ) {
-        let (addr, server) = localhost_https_server();
+        let (addr, server) = simple_localhost_https_server();
         let _server_handle = tokio::spawn(server);
 
         let mut root_cert_store = RootCertStore::empty();
@@ -460,14 +461,16 @@ mod test {
         set_up_platform_verifier(&mut ssl, Host::Domain(SERVER_HOSTNAME), verifier).expect("valid");
 
         let transport = TcpStream::connect(addr).await.expect("can connect");
-        assert_matches!(
+        let err = assert_matches!(
             tokio_boring_signal::connect(
                 ssl.build().configure().expect("valid"),
                 SERVER_HOSTNAME,
                 transport,
             )
             .await,
-            Err(e) if e.code() == Some(ErrorCode::SSL)
+            Err(e) if e.code() == Some(ErrorCode::SSL) => e
         );
+        let failure = err.ssl().and_then(|ssl| ssl.verify_result().err());
+        assert_matches!(failure, Some(X509VerifyError::APPLICATION_VERIFICATION));
     }
 }

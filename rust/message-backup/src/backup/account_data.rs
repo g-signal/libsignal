@@ -29,6 +29,7 @@ use crate::proto::backup as proto;
     M::Value<Option<Subscription>>: PartialEq,
     M::Value<Option<IapSubscriberData>>: PartialEq,
     AccountSettings<M>: PartialEq,
+    M::Value<Option<AndroidSpecificSettings>>: PartialEq,
 ))]
 pub struct AccountData<M: Method + ReferencedTypes> {
     #[serde(
@@ -44,6 +45,9 @@ pub struct AccountData<M: Method + ReferencedTypes> {
     pub donation_subscription: M::Value<Option<Subscription>>,
     pub backup_subscription: M::Value<Option<IapSubscriberData>>,
     pub svr_pin: M::Value<String>,
+    pub android_specific_settings: M::Value<Option<AndroidSpecificSettings>>,
+    pub bio_text: M::Value<String>,
+    pub bio_emoji: M::Value<String>,
 }
 
 #[serde_as]
@@ -93,6 +97,7 @@ pub enum IapSubscriptionId {
     IosAppStoreOriginalTransactionId(u64),
 }
 
+#[serde_as]
 #[derive_where(Debug)]
 #[derive(serde::Serialize)]
 #[cfg_attr(test, derive_where(PartialEq;
@@ -104,6 +109,11 @@ pub enum IapSubscriptionId {
     M::Value<Option<ChatStyle<M>>>: PartialEq,
     M::CustomColorData: PartialEq,
     M::Value<Option<BackupLevel>>: PartialEq,
+    M::Value<SentMediaQuality>: PartialEq,
+    M::Value<Option<AutoDownloadSettings>>: PartialEq,
+    M::Value<Option<Duration>>: PartialEq,
+    M::Value<AppTheme>: PartialEq,
+    M::Value<CallsUseLessDataSetting>: PartialEq,
 ))]
 pub struct AccountSettings<M: Method + ReferencedTypes> {
     pub phone_number_sharing: M::Value<PhoneSharing>,
@@ -127,12 +137,70 @@ pub struct AccountSettings<M: Method + ReferencedTypes> {
     pub custom_chat_colors: CustomColorMap<M>,
     pub optimize_on_device_storage: M::Value<bool>,
     pub backup_level: M::Value<Option<BackupLevel>>,
+    pub default_sent_media_quality: M::Value<SentMediaQuality>,
+    pub auto_download_settings: M::Value<Option<AutoDownloadSettings>>,
+    pub screen_lock_timeout: M::Value<Option<Duration>>,
+    pub pin_reminders: M::Value<Option<bool>>,
+    pub app_theme: M::Value<AppTheme>,
+    pub calls_use_less_data_setting: M::Value<CallsUseLessDataSetting>,
+    pub allow_sealed_sender_from_anyone: M::Value<bool>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
 pub enum PhoneSharing {
     WithEverybody,
     WithNobody,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
+pub enum SentMediaQuality {
+    Standard,
+    High,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
+pub enum NavigationBarSize {
+    Normal,
+    Compact,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct AndroidSpecificSettings {
+    pub use_system_emoji: bool,
+    pub screenshot_security: bool,
+    pub navigation_bar_size: NavigationBarSize,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
+pub enum AutoDownloadOption {
+    Never,
+    Wifi,
+    WifiAndCellular,
+}
+
+#[serde_as]
+#[derive(Debug, serde::Serialize)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct AutoDownloadSettings {
+    pub images: AutoDownloadOption,
+    pub audio: AutoDownloadOption,
+    pub video: AutoDownloadOption,
+    pub documents: AutoDownloadOption,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
+pub enum AppTheme {
+    System,
+    Light,
+    Dark,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, serde::Serialize)]
+pub enum CallsUseLessDataSetting {
+    Never,
+    MobileDataOnly,
+    WifiAndMobileData,
 }
 
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
@@ -164,6 +232,16 @@ pub enum AccountDataError {
     UnknownBackupTier(u64),
     /// optimize on device storage is enabled without paid tier
     OptimizeStorageWithoutPaidTier,
+    /// default sent media quality is UNKNOWN
+    UnknownSentMediaQuality,
+    /// auto download option is UNKNOWN
+    UnknownAutoDownloadOption,
+    /// navigation bar size in Android specific settings is UNKNOWN
+    UnknownAndroidNavigationBarSize,
+    /// app theme is UNKNOWN
+    UnknownAppTheme,
+    /// calls use less data setting is UNKNOWN
+    UnknownCallsUseLessDataSetting,
 }
 
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
@@ -193,6 +271,9 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             donationSubscriberData,
             backupsSubscriberData,
             svrPin,
+            androidSpecificSettings,
+            bioText,
+            bioEmoji,
             special_fields: _,
         } = self;
 
@@ -226,6 +307,11 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             .transpose()
             .map_err(AccountDataError::BackupSubscription)?;
 
+        let android_specific_settings = androidSpecificSettings
+            .into_option()
+            .map(AndroidSpecificSettings::try_from)
+            .transpose()?;
+
         Ok(AccountData {
             profile_key: M::value(profile_key),
             username: M::value(username),
@@ -236,6 +322,9 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             donation_subscription: M::value(donation_subscription),
             backup_subscription: M::value(backup_subscription),
             svr_pin: M::value(svrPin),
+            android_specific_settings: M::value(android_specific_settings),
+            bio_text: M::value(bioText),
+            bio_emoji: M::value(bioEmoji),
         })
     }
 }
@@ -369,6 +458,13 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             customChatColors,
             optimizeOnDeviceStorage,
             backupTier,
+            defaultSentMediaQuality,
+            autoDownloadSettings,
+            screenLockTimeoutMinutes,
+            pinReminders,
+            appTheme,
+            callsUseLessDataSetting,
+            allowSealedSenderFromAnyone,
             special_fields: _,
         } = self;
 
@@ -402,6 +498,44 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             return Err(AccountDataError::OptimizeStorageWithoutPaidTier);
         }
 
+        let auto_download_settings = autoDownloadSettings
+            .into_option()
+            .map(|x| x.try_into())
+            .transpose()?;
+
+        use proto::account_data::SentMediaQuality as MediaQualityProto;
+
+        let default_sent_media_quality = match defaultSentMediaQuality.enum_value_or_default() {
+            MediaQualityProto::UNKNOWN_QUALITY => {
+                return Err(AccountDataError::UnknownSentMediaQuality);
+            }
+            MediaQualityProto::STANDARD => SentMediaQuality::Standard,
+            MediaQualityProto::HIGH => SentMediaQuality::High,
+        };
+
+        let screen_lock_timeout =
+            screenLockTimeoutMinutes.map(|mins| Duration::from_mins(mins as u64));
+
+        use proto::account_data::AppTheme as AppThemeProto;
+        let app_theme = match appTheme.enum_value_or_default() {
+            AppThemeProto::UNKNOWN_APP_THEME => {
+                return Err(AccountDataError::UnknownAppTheme);
+            }
+            AppThemeProto::SYSTEM => AppTheme::System,
+            AppThemeProto::LIGHT => AppTheme::Light,
+            AppThemeProto::DARK => AppTheme::Dark,
+        };
+
+        use proto::account_data::CallsUseLessDataSetting as CallDataProto;
+        let calls_use_less_data_setting = match callsUseLessDataSetting.enum_value_or_default() {
+            CallDataProto::UNKNOWN_CALL_DATA_SETTING => {
+                return Err(AccountDataError::UnknownCallsUseLessDataSetting);
+            }
+            CallDataProto::NEVER => CallsUseLessDataSetting::Never,
+            CallDataProto::MOBILE_DATA_ONLY => CallsUseLessDataSetting::MobileDataOnly,
+            CallDataProto::WIFI_AND_MOBILE_DATA => CallsUseLessDataSetting::WifiAndMobileData,
+        };
+
         Ok(AccountSettings {
             phone_number_sharing: M::value(phone_number_sharing),
             default_chat_style: M::value(default_chat_style),
@@ -424,6 +558,81 @@ impl<M: Method + ReferencedTypes, C: ReportUnusualTimestamp> TryIntoWith<Account
             universal_expire_timer: M::value(universal_expire_timer),
             optimize_on_device_storage: M::value(optimizeOnDeviceStorage),
             backup_level: M::value(backup_level),
+            auto_download_settings: M::value(auto_download_settings),
+            pin_reminders: M::value(pinReminders),
+            default_sent_media_quality: M::value(default_sent_media_quality),
+            screen_lock_timeout: M::value(screen_lock_timeout),
+            app_theme: M::value(app_theme),
+            calls_use_less_data_setting: M::value(calls_use_less_data_setting),
+            allow_sealed_sender_from_anyone: M::value(allowSealedSenderFromAnyone),
+        })
+    }
+}
+
+impl TryFrom<proto::account_data::auto_download_settings::AutoDownloadOption>
+    for AutoDownloadOption
+{
+    type Error = AccountDataError;
+
+    fn try_from(
+        value: proto::account_data::auto_download_settings::AutoDownloadOption,
+    ) -> Result<Self, Self::Error> {
+        use proto::account_data::auto_download_settings::AutoDownloadOption as OptionProto;
+        Ok(match value {
+            OptionProto::UNKNOWN => {
+                return Err(AccountDataError::UnknownAutoDownloadOption);
+            }
+            OptionProto::NEVER => Self::Never,
+            OptionProto::WIFI => Self::Wifi,
+            OptionProto::WIFI_AND_CELLULAR => Self::WifiAndCellular,
+        })
+    }
+}
+impl TryFrom<proto::account_data::AutoDownloadSettings> for AutoDownloadSettings {
+    type Error = AccountDataError;
+
+    fn try_from(value: proto::account_data::AutoDownloadSettings) -> Result<Self, Self::Error> {
+        use proto::account_data::AutoDownloadSettings as SettingsProto;
+
+        let SettingsProto {
+            images,
+            audio,
+            video,
+            documents,
+            special_fields: _,
+        } = value;
+        Ok(Self {
+            images: images.enum_value_or_default().try_into()?,
+            audio: audio.enum_value_or_default().try_into()?,
+            video: video.enum_value_or_default().try_into()?,
+            documents: documents.enum_value_or_default().try_into()?,
+        })
+    }
+}
+
+impl TryFrom<proto::account_data::AndroidSpecificSettings> for AndroidSpecificSettings {
+    type Error = AccountDataError;
+
+    fn try_from(value: proto::account_data::AndroidSpecificSettings) -> Result<Self, Self::Error> {
+        use proto::account_data::AndroidSpecificSettings as SettingsProto;
+        let SettingsProto {
+            useSystemEmoji,
+            screenshotSecurity,
+            navigationBarSize,
+            special_fields: _,
+        } = value;
+        use proto::account_data::android_specific_settings::NavigationBarSize as BarSizeProto;
+        let navigation_bar_size = match navigationBarSize.enum_value_or_default() {
+            BarSizeProto::UNKNOWN_BAR_SIZE => {
+                return Err(AccountDataError::UnknownAndroidNavigationBarSize);
+            }
+            BarSizeProto::NORMAL => NavigationBarSize::Normal,
+            BarSizeProto::COMPACT => NavigationBarSize::Compact,
+        };
+        Ok(Self {
+            use_system_emoji: useSystemEmoji,
+            screenshot_security: screenshotSecurity,
+            navigation_bar_size,
         })
     }
 }
@@ -461,6 +670,7 @@ mod test {
                     ),
                     ..Default::default()
                 }).into(),
+                androidSpecificSettings: Some(proto::account_data::AndroidSpecificSettings::test_data()).into(),
                 ..Default::default()
             }
         }
@@ -483,8 +693,56 @@ mod test {
                 .into(),
                 optimizeOnDeviceStorage: false,
                 backupTier: Some(BackupLevel::Paid.into()),
+                autoDownloadSettings: Some(proto::account_data::AutoDownloadSettings::test_data())
+                    .into(),
+                screenLockTimeoutMinutes: Some(42),
+                defaultSentMediaQuality: proto::account_data::SentMediaQuality::STANDARD.into(),
+                appTheme: proto::account_data::AppTheme::SYSTEM.into(),
+                callsUseLessDataSetting:
+                    proto::account_data::CallsUseLessDataSetting::MOBILE_DATA_ONLY.into(),
                 ..Default::default()
             }
+        }
+    }
+
+    impl proto::account_data::AutoDownloadSettings {
+        fn test_data() -> Self {
+            use proto::account_data::auto_download_settings::AutoDownloadOption as OptionProto;
+            Self {
+                images: OptionProto::NEVER.into(),
+                audio: OptionProto::NEVER.into(),
+                video: OptionProto::WIFI.into(),
+                documents: OptionProto::WIFI_AND_CELLULAR.into(),
+                ..Default::default()
+            }
+        }
+    }
+
+    impl AutoDownloadSettings {
+        pub(crate) fn from_proto_test_data() -> Self {
+            Self::try_from(proto::account_data::AutoDownloadSettings::test_data())
+                .expect("valid test data")
+        }
+    }
+
+    impl proto::account_data::AndroidSpecificSettings {
+        fn test_data() -> Self {
+            Self {
+                useSystemEmoji: true,
+                screenshotSecurity: false,
+                navigationBarSize:
+                    proto::account_data::android_specific_settings::NavigationBarSize::COMPACT
+                        .into(),
+                ..Default::default()
+            }
+        }
+    }
+
+    impl AndroidSpecificSettings {
+        pub(crate) fn from_proto_test_data() -> Self {
+            proto::account_data::AndroidSpecificSettings::test_data()
+                .try_into()
+                .expect("valid data")
         }
     }
 
@@ -561,6 +819,13 @@ mod test {
                     custom_chat_colors: CustomColorMap::from_proto_test_data(),
                     optimize_on_device_storage: false,
                     backup_level: Some(BackupLevel::Paid),
+                    auto_download_settings: Some(AutoDownloadSettings::from_proto_test_data()),
+                    pin_reminders: None,
+                    default_sent_media_quality: SentMediaQuality::Standard,
+                    screen_lock_timeout: Some(Duration::from_mins(42)),
+                    app_theme: AppTheme::System,
+                    calls_use_less_data_setting: CallsUseLessDataSetting::MobileDataOnly,
+                    allow_sealed_sender_from_anyone: false,
                 },
                 avatar_url_path: "".to_string(),
                 backup_subscription: Some(IapSubscriberData {
@@ -569,6 +834,9 @@ mod test {
                 }),
                 donation_subscription: None,
                 svr_pin: "".to_string(),
+                android_specific_settings: Some(AndroidSpecificSettings::from_proto_test_data()),
+                bio_text: "".to_string(),
+                bio_emoji: "".to_string(),
             }
         }
     }

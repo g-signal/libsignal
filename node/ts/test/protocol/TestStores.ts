@@ -5,8 +5,8 @@
 
 /* eslint-disable @typescript-eslint/require-await */
 
-import * as SignalClient from '../../index';
-import * as util from '../util';
+import * as SignalClient from '../../index.js';
+import * as util from '../util.js';
 
 util.initLogger();
 
@@ -37,7 +37,7 @@ export class InMemorySessionStore extends SignalClient.SessionStore {
       const idx = `${address.name()}::${address.deviceId()}`;
       const serialized = this.state.get(idx);
       if (!serialized) {
-        throw `no session for ${idx}`;
+        throw new Error(`no session for ${idx}`);
       }
       return SignalClient.SessionRecord.deserialize(serialized);
     });

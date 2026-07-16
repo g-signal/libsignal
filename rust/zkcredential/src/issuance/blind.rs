@@ -243,7 +243,7 @@ impl Serialize for BlindingKeyPair {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 struct BlindedCredential {
     t: Scalar,
     U: RistrettoPoint,
@@ -256,7 +256,7 @@ struct BlindedCredential {
 /// Slightly larger than a typical [`IssuanceProof`] (which is why it's a separate type at all).
 ///
 /// Use [`IssuanceProofBuilder`] to validate and extract the credential.
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BlindedIssuanceProof {
     credential: BlindedCredential,
     poksho_proof: Vec<u8>,
@@ -491,7 +491,7 @@ impl BlindedIssuanceProofBuilder<'_> {
                 self.inner.authenticated_message,
                 &sho.squeeze_and_ratchet_as_array::<RANDOMNESS_LEN>(),
             )
-            .unwrap();
+            .expect("valid proof");
         BlindedIssuanceProof {
             poksho_proof,
             credential,
@@ -518,10 +518,7 @@ impl BlindedIssuanceProofBuilder<'_> {
                 &point_args,
                 self.inner.authenticated_message,
             )
-            .map_err(|e| {
-                log::warn!("poksho proof verification failed {:?}", e);
-                VerificationFailure
-            })?;
+            .map_err(|_| VerificationFailure)?;
         let V = proof.credential.S2 - blinding_key.private_key().y * proof.credential.S1;
         Ok(Credential {
             t: proof.credential.t,

@@ -21,6 +21,7 @@ java_build: DOCKER_EXTRA=$(shell [ -L build ] && P=$$(readlink build) && echo -v
 java_build: docker_image
 	$(DOCKER) run $(DOCKER_TTY_FLAG) --init --rm --user $$(id -u):$$(id -g) \
 		--env LIBSIGNAL_TESTING_RUN_NONHERMETIC_TESTS \
+		--env LIBSIGNAL_TESTING_IGNORE_KT_TESTS \
 		--env LIBSIGNAL_TESTING_PROXY_SERVER \
         -v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) $(DOCKER_IMAGE) \
         sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) build $(CROSS_COMPILE_SERVER)"
@@ -42,14 +43,13 @@ publish_java: docker_image
 	else echo "<not set>"; fi)"
 	@echo "========================================="
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
-		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
-		-e ORG_GRADLE_PROJECT_sonatypeUsername \
-		-e ORG_GRADLE_PROJECT_sonatypePassword \
 		-e ORG_GRADLE_PROJECT_signingKeyId \
 		-e ORG_GRADLE_PROJECT_signingPassword \
 		-e ORG_GRADLE_PROJECT_signingKey \
+		-e CLOUDSDK_AUTH_ACCESS_TOKEN \
+		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
 		$(DOCKER_IMAGE) \
-		sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) publish closeAndReleaseStagingRepositories $(CROSS_COMPILE_SERVER)"
+		sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) publish $(CROSS_COMPILE_SERVER)"
 
 test_signing: DOCKER_EXTRA = $(shell [ -L build ] && P=$$(readlink build) && echo -v $$P/:$$P )
 test_signing: docker_image

@@ -1,3 +1,5 @@
+> **📣 If you were previously using libsignal from Maven or Gradle, our repository location has changed with the 0.86.6 release. See below for more information.**
+
 # Overview
 
 libsignal contains platform-agnostic APIs used by the official Signal clients and servers, exposed
@@ -43,15 +45,15 @@ increases to the minimum supported tools versions.
 
 ### Toolchain Installation
 
-To build anything in this repository you must have [Rust](https://rust-lang.org) installed,
-as well as Clang, libclang, [CMake](https://cmake.org), Make, protoc, and git.
+To build anything in this repository you must have [Rust](https://rust-lang.org) installed, as well
+as recent versions of Clang, libclang, [CMake](https://cmake.org), Make, protoc, Python (3.9+), and git.
 
 #### Linux/Debian
 
 On a Debian-like system, you can get these extra dependencies through `apt`:
 
 ```shell
-$ apt-get install clang libclang-dev cmake make protobuf-compiler git
+$ apt-get install clang libclang-dev cmake make protobuf-compiler python3 git
 ```
 
 #### macOS
@@ -88,12 +90,13 @@ You should always install any Rust tools you need that may affect the build from
 package manager (e.g. `apt` or `brew`). Package managers sometimes contain outdated versions of these tools that can break
 the build with incompatibility issues (especially cbindgen).
 
-To install the main Rust extra dependencies matching the versions we use, you can run the following commands: 
+To install the main Rust extra dependencies matching the versions we use, you can run the following commands:
 
 ```shell
-$ cargo +stable install cbindgen cargo-fuzz
-$ cargo +stable install --version "$(cat ../acknowledgments/cargo-about-version)" --locked cargo-about
-$ cargo +stable install --version "$(cat ../.taplo-cli-version)" --locked taplo-cli
+$ cargo +stable install --version "$(cat .cbindgen-version)" --locked cbindgen
+$ cargo +stable install --version "$(cat acknowledgments/cargo-about-version)" --locked cargo-about
+$ cargo +stable install --version "$(cat .taplo-cli-version)" --locked taplo-cli
+$ cargo +stable install cargo-fuzz
 ```
 
 ## Java/Android
@@ -144,13 +147,25 @@ $ make
 When exposing new APIs to Java, you will need to run `rust/bridge/jni/bin/gen_java_decl.py` in
 addition to rebuilding. This requires installing the `cbindgen` Rust tool, as detailed above. 
 
-### Maven Central
+### Use as a library
 
-Signal publishes Java packages on [Maven Central](https://central.sonatype.org) for its own use,
-under the names org.signal:libsignal-server, org.signal:libsignal-client, and
-org.signal:libsignal-android. libsignal-client and libsignal-server contain native libraries for
-Debian-flavored x86_64 Linux as well as Windows (x86_64) and macOS (x86_64 and arm64).
-libsignal-android contains native libraries for armeabi-v7a, arm64-v8a, x86, and x86_64 Android.
+Signal publishes Java packages for its own use, under the names org.signal:libsignal-server,
+org.signal:libsignal-client, and org.signal:libsignal-android. libsignal-client and libsignal-server
+contain native libraries for Debian-flavored x86_64 Linux as well as Windows (x86_64) and macOS
+(x86_64 and arm64). libsignal-android contains native libraries for armeabi-v7a, arm64-v8a, x86, and
+x86_64 Android. These are located in a Maven repository at
+https://build-artifacts.signal.org/libraries/maven/; for use from Gradle, add the following to your
+`repositories` block:
+
+```
+maven {
+  name = "SignalBuildArtifacts"
+  // The "uri()" part is only necessary for Kotlin Gradle; Groovy Gradle accepts a bare string here.
+  url = uri("https://build-artifacts.signal.org/libraries/maven/")
+}
+```
+
+Older builds were published to [Maven Central](https://central.sonatype.org) instead.
 
 When building for Android you need *both* libsignal-android and libsignal-client, but the Windows
 and macOS libraries in libsignal-client won't automatically be excluded from your final app. You can
@@ -253,6 +268,6 @@ Administration Regulations, Section 740.13) for both object code and source code
 
 ## License
 
-Copyright 2020-2024 Signal Messenger, LLC
+Copyright 2020-2026 Signal Messenger, LLC
 
 Licensed under the GNU AGPLv3: https://www.gnu.org/licenses/agpl-3.0.html

@@ -6,8 +6,12 @@
 use std::num::NonZeroU16;
 
 use libsignal_bridge_macros::bridge_fn;
-pub use libsignal_bridge_types::net::{ConnectionManager, Environment, TokioAsyncContext};
+pub use libsignal_bridge_types::net::remote_config::RemoteConfigKey;
+pub use libsignal_bridge_types::net::{
+    BuildVariant, ConnectionManager, Environment, TokioAsyncContext,
+};
 use libsignal_net::chat::ConnectionInfo;
+use libsignal_net::connect_state::infer_proxy_mode_for_config;
 use libsignal_net::infra::errors::LogSafeDisplay;
 use libsignal_net::infra::route::ConnectionProxyConfig;
 
@@ -93,11 +97,13 @@ fn ConnectionManager_new(
     environment: AsType<Environment, u8>,
     user_agent: String,
     remote_config: &mut BridgedStringMap,
+    build_variant: AsType<BuildVariant, u8>,
 ) -> ConnectionManager {
     ConnectionManager::new(
         environment.into_inner(),
         user_agent.as_str(),
         remote_config.take(),
+        build_variant.into_inner(),
     )
 }
 
@@ -106,7 +112,7 @@ fn ConnectionManager_set_proxy(
     connection_manager: &ConnectionManager,
     proxy: &ConnectionProxyConfig,
 ) {
-    connection_manager.set_proxy(proxy.clone())
+    connection_manager.set_proxy_mode(infer_proxy_mode_for_config(proxy.clone()))
 }
 
 #[bridge_fn]
@@ -116,7 +122,7 @@ fn ConnectionManager_set_invalid_proxy(connection_manager: &ConnectionManager) {
 
 #[bridge_fn]
 fn ConnectionManager_clear_proxy(connection_manager: &ConnectionManager) {
-    connection_manager.clear_proxy();
+    connection_manager.set_proxy_mode(libsignal_net::infra::route::DirectOrProxyMode::DirectOnly);
 }
 
 #[bridge_fn(jni = false, ffi = false)]
@@ -136,8 +142,9 @@ fn ConnectionManager_set_censorship_circumvention_enabled(
 fn ConnectionManager_set_remote_config(
     connection_manager: &ConnectionManager,
     remote_config: &mut BridgedStringMap,
+    build_variant: AsType<BuildVariant, u8>,
 ) {
-    connection_manager.set_remote_config(remote_config.take());
+    connection_manager.set_remote_config(remote_config.take(), build_variant.into_inner());
 }
 
 #[bridge_fn]

@@ -24,6 +24,7 @@ subtle = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 x25519-dalek = { workspace = true, features = ["static_secrets"] }
+zerocopy = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
 assert_matches = { workspace = true }
@@ -32,7 +33,6 @@ boring-sys = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 const-str = { workspace = true }
 criterion = { workspace = true }
-foreign-types = { workspace = true }
 hex = { workspace = true }
 proptest = { workspace = true }
 

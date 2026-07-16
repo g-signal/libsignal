@@ -11,6 +11,7 @@ use std::convert::Infallible;
 use libsignal_net::infra::errors::LogSafeDisplay;
 
 pub mod keytrans;
+pub mod messages;
 pub mod profiles;
 pub mod registration;
 pub mod usernames;
@@ -31,7 +32,7 @@ impl<'a, T> From<&'a T> for &'a Unauth<T> {
             std::ptr::from_ref(value)
                 .cast::<Unauth<T>>()
                 .as_ref()
-                .unwrap()
+                .expect("started with a reference")
         }
     }
 }
@@ -42,15 +43,14 @@ pub struct Registration<T>(pub T);
 
 /// Authorization for requests on unauthenticated connections involving other users.
 ///
-/// TODO: for multi-recipient message sends *specifically* there's one more kind of authorization,
-/// "this is a story". That should be handled as a separate type since other requests don't have
-/// that.
+/// For multi-recipient messages, see [messages::MultiRecipientSendAuthorization].
 pub enum UserBasedAuthorization {
     AccessKey([u8; 16]),
     Group(zkgroup::groups::GroupSendFullToken),
 }
 
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
+#[cfg_attr(test, derive(Clone))]
 #[ignore_extra_doc_attributes]
 pub enum RequestError<E, D = DisconnectedError> {
     /// the request timed out
@@ -86,6 +86,7 @@ impl<E, D> From<Infallible> for RequestError<E, D> {
 }
 
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
+#[cfg_attr(test, derive(Clone))]
 #[ignore_extra_doc_attributes]
 pub enum DisconnectedError {
     /// the server explicitly disconnected us because we connected elsewhere with the same credentials
@@ -107,6 +108,7 @@ impl<E> From<DisconnectedError> for RequestError<E> {
 }
 
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
+#[cfg_attr(test, derive(Clone))]
 /// retry after completing a rate limit challenge {options:?}
 pub struct RateLimitChallenge {
     pub token: String,
@@ -127,15 +129,23 @@ pub enum ChallengeOption {
 /// A convenience trait covering all Chat APIs.
 ///
 /// This should be extended to include any new submodules' traits.
-pub trait UnauthenticatedChatApi:
+///
+/// ### Generic?
+///
+/// The type parameter `T` is a marker to distinguish blanket impls that would otherwise overlap.
+/// Any concrete type will only impl this trait in one way; anywhere that needs to use
+/// UnauthenticatedChatApi generically should accept an arbitrary `T` here.
+pub trait UnauthenticatedChatApi<T>:
     keytrans::UnauthenticatedChatApi
+    + messages::UnauthenticatedChatApi
     + profiles::UnauthenticatedChatApi
-    + usernames::UnauthenticatedChatApi
+    + usernames::UnauthenticatedChatApi<T>
 {
 }
-impl<T> UnauthenticatedChatApi for T where
-    T: keytrans::UnauthenticatedChatApi
+impl<T, U> UnauthenticatedChatApi<T> for U where
+    U: keytrans::UnauthenticatedChatApi
+        + messages::UnauthenticatedChatApi
         + profiles::UnauthenticatedChatApi
-        + usernames::UnauthenticatedChatApi
+        + usernames::UnauthenticatedChatApi<T>
 {
 }

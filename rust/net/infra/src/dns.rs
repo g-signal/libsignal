@@ -23,14 +23,15 @@ use crate::dns::dns_utils::log_safe_domain;
 use crate::dns::lookup_result::LookupResult;
 use crate::host::Host;
 use crate::route::{
-    DEFAULT_HTTPS_PORT, HttpRouteFragment, HttpsTlsRoute, TcpRoute, TlsRoute, TlsRouteFragment,
+    DEFAULT_HTTPS_PORT, HttpRouteFragment, HttpVersion, HttpsTlsRoute, TcpRoute, TlsRoute,
+    TlsRouteFragment,
 };
 use crate::timeouts::{
     DNS_LATER_RESPONSE_GRACE_PERIOD, DNS_SYSTEM_LOOKUP_TIMEOUT, DOH_FALLBACK_LOOKUP_TIMEOUT,
 };
 use crate::utils::NetworkChangeEvent;
 use crate::utils::oneshot_broadcast::{self, Receiver};
-use crate::{Alpn, utils};
+use crate::{Alpn, OverrideNagleAlgorithm, utils};
 
 pub mod custom_resolver;
 mod dns_errors;
@@ -106,6 +107,7 @@ pub fn build_custom_resolver_cloudflare_doh(
                 path_prefix: "".into(),
                 front_name: None,
                 host_header: Arc::from(host.to_string()),
+                http_version: Some(HttpVersion::Http2),
             },
             inner: TlsRoute {
                 fragment: TlsRouteFragment {
@@ -117,6 +119,7 @@ pub fn build_custom_resolver_cloudflare_doh(
                 inner: TcpRoute {
                     address: ip_addr,
                     port: DEFAULT_HTTPS_PORT,
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
             },
         }
@@ -154,7 +157,7 @@ impl DnsResolver {
     /// Creates a DNS resolver that will only use a provided static map
     /// to resolve DNS lookups
     #[cfg_attr(feature = "test-util", visibility::make(pub))]
-    pub(crate) fn new_from_static_map(static_map: HashMap<&'static str, LookupResult>) -> Self {
+    fn new_from_static_map(static_map: HashMap<&'static str, LookupResult>) -> Self {
         DnsResolver {
             lookup_options: Arc::new([LookupOption {
                 lookup: Box::new(StaticDnsMap(static_map)),
@@ -179,6 +182,7 @@ impl DnsResolver {
         let known_good_results = Arc::new(
             static_map
                 .iter()
+                .filter(|(_host, result)| !result.is_empty())
                 .map(|(host, result)| (*host, HashSet::from_iter(result)))
                 .collect(),
         );

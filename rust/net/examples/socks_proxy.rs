@@ -13,11 +13,11 @@ use std::sync::Arc;
 use clap::Parser;
 use futures_util::StreamExt;
 use futures_util::stream::FuturesUnordered;
+use libsignal_net::infra::OverrideNagleAlgorithm;
 use libsignal_net::infra::certs::RootCertificates;
 use libsignal_net::infra::dns::DnsResolver;
 use libsignal_net::infra::host::Host;
 use libsignal_net::infra::tcp_ssl::proxy::socks::Protocol;
-use libsignal_net_infra::errors::TransportConnectError;
 use libsignal_net_infra::route::{
     ConnectorExt as _, ProxyTarget, SocksRoute, TcpRoute, TlsRoute, TlsRouteFragment,
     UnresolvedHost,
@@ -107,6 +107,7 @@ async fn main() {
                     address: Host::<Arc<str>>::parse_as_ip_or_domain(proxy_host)
                         .map_domain(UnresolvedHost::from),
                     port: proxy_port,
+                    override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                 },
                 target_addr: target_host,
                 target_port,
@@ -117,11 +118,10 @@ async fn main() {
         let resolved = libsignal_net::infra::route::resolve_route(&dns_resolver, unresolved_route)
             .await
             .expect("failed to resolve");
-        let connector =
-            libsignal_net::infra::route::ComposedConnector::<_, _, TransportConnectError>::new(
-                libsignal_net::infra::tcp_ssl::StatelessTls,
-                libsignal_net::infra::tcp_ssl::proxy::StatelessProxied,
-            );
+        let connector = libsignal_net::infra::route::ComposedConnector::new(
+            libsignal_net::infra::tcp_ssl::StatelessTls,
+            libsignal_net::infra::tcp_ssl::proxy::StatelessProxied,
+        );
 
         const START_NEXT_DELAY: Duration = Duration::from_secs(5);
         let connect_attempts = FuturesUnordered::from_iter(resolved.zip(0..).map(|(route, i)| {

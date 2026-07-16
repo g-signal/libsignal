@@ -24,7 +24,7 @@ use crate::common::serialization::ReservedByte;
 use crate::common::sho::Sho;
 use crate::common::simple_types::*;
 use crate::generic_server_params::{GenericServerPublicParams, GenericServerSecretParams};
-use crate::{SECONDS_PER_DAY, ZkGroupDeserializationFailure, ZkGroupVerificationFailure};
+use crate::{ZkGroupDeserializationFailure, ZkGroupVerificationFailure};
 
 #[derive(Serialize, Deserialize, Clone, Copy)]
 struct BackupIdPoint(RistrettoPoint);
@@ -107,7 +107,7 @@ impl TryFrom<u64> for BackupCredentialType {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BackupAuthCredentialRequestContext {
     reserved: ReservedByte,
     blinded_backup_id: zkcredential::issuance::blind::BlindedPoint,
@@ -150,7 +150,7 @@ impl BackupAuthCredentialRequestContext {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BackupAuthCredentialRequest {
     reserved: ReservedByte,
     blinded_backup_id: zkcredential::issuance::blind::BlindedPoint,
@@ -181,7 +181,7 @@ impl BackupAuthCredentialRequest {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BackupAuthCredentialResponse {
     reserved: ReservedByte,
     // In theory, we don't need to store this (AuthCredentialResponse doesn't),
@@ -200,47 +200,34 @@ impl BackupAuthCredentialRequestContext {
         params: &GenericServerPublicParams,
         expected_redemption_time: Timestamp,
     ) -> Result<BackupAuthCredential, ZkGroupVerificationFailure> {
-        if response.redemption_time != expected_redemption_time {
-            log::warn!(
-                "redemption_time mismatch: {} != {}",
-                response.redemption_time.epoch_seconds(),
-                expected_redemption_time.epoch_seconds()
-            );
+        if response.redemption_time != expected_redemption_time
+            || !response.redemption_time.is_day_aligned()
+        {
             return Err(ZkGroupVerificationFailure);
         }
-
-        if !response.redemption_time.is_day_aligned() {
-            log::warn!(
-                "redemption_time is not day-aligned: {}",
-                response.redemption_time.epoch_seconds()
-            );
-            return Err(ZkGroupVerificationFailure);
-        }
-
-        let credential = zkcredential::issuance::IssuanceProofBuilder::new(CREDENTIAL_LABEL)
-            .add_public_attribute(&response.redemption_time)
-            .add_public_attribute(&u64::from(response.backup_level))
-            .add_public_attribute(&u64::from(response.credential_type))
-            .add_blinded_revealed_attribute(&self.blinded_backup_id)
-            .verify(
-                &params.credential_key,
-                &self.key_pair,
-                response.blinded_credential,
-            )
-            .map_err(|_| ZkGroupVerificationFailure)?;
 
         Ok(BackupAuthCredential {
             reserved: Default::default(),
             redemption_time: response.redemption_time,
             backup_level: response.backup_level,
             credential_type: response.credential_type,
-            credential,
+            credential: zkcredential::issuance::IssuanceProofBuilder::new(CREDENTIAL_LABEL)
+                .add_public_attribute(&response.redemption_time)
+                .add_public_attribute(&u64::from(response.backup_level))
+                .add_public_attribute(&u64::from(response.credential_type))
+                .add_blinded_revealed_attribute(&self.blinded_backup_id)
+                .verify(
+                    &params.credential_key,
+                    &self.key_pair,
+                    response.blinded_credential,
+                )
+                .map_err(|_| ZkGroupVerificationFailure)?,
             backup_id: self.backup_id,
         })
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BackupAuthCredential {
     reserved: ReservedByte,
     redemption_time: Timestamp,
@@ -281,7 +268,7 @@ impl BackupAuthCredential {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct BackupAuthCredentialPresentation {
     version: ReservedByte,
     backup_level: BackupLevel,
@@ -297,18 +284,10 @@ impl BackupAuthCredentialPresentation {
         current_time: Timestamp,
         server_params: &GenericServerSecretParams,
     ) -> Result<(), ZkGroupVerificationFailure> {
-        let acceptable_start_time = self
-            .redemption_time
-            .checked_sub_seconds(SECONDS_PER_DAY)
-            .ok_or(ZkGroupVerificationFailure)?;
-        let acceptable_end_time = self
-            .redemption_time
-            .checked_add_seconds(2 * SECONDS_PER_DAY)
-            .ok_or(ZkGroupVerificationFailure)?;
-
-        if !(acceptable_start_time..=acceptable_end_time).contains(&current_time) {
-            return Err(ZkGroupVerificationFailure);
-        }
+        crate::ServerSecretParams::check_auth_credential_redemption_time(
+            self.redemption_time,
+            current_time,
+        )?;
 
         zkcredential::presentation::PresentationProofVerifier::new(CREDENTIAL_LABEL)
             .add_public_attribute(&self.redemption_time)

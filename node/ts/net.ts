@@ -4,28 +4,49 @@
 //
 
 import type { ReadonlyDeep } from 'type-fest';
-import * as Native from '../Native';
-import { cdsiLookup, CDSRequestOptionsType, CDSResponseType } from './net/CDSI';
+import * as Native from './Native.js';
+import {
+  cdsiLookup,
+  CDSRequestOptionsType,
+  CDSResponseType,
+} from './net/CDSI.js';
 import {
   ChatConnection,
   ConnectionEventsListener,
   UnauthenticatedChatConnection,
   AuthenticatedChatConnection,
   ChatServiceListener,
-} from './net/Chat';
-import { RegistrationService } from './net/Registration';
-import { SvrB } from './net/SvrB';
-import { BridgedStringMap, newNativeHandle } from './internal';
-export * from './net/CDSI';
-export * from './net/Chat';
-export * from './net/chat/UnauthUsernamesService';
-export * from './net/Registration';
-export * from './net/SvrB';
+  ProvisioningConnection,
+  ProvisioningConnectionListener,
+} from './net/Chat.js';
+import { RegistrationService } from './net/Registration.js';
+import { SvrB } from './net/SvrB.js';
+import { BridgedStringMap, newNativeHandle } from './internal.js';
+export * from './net/CDSI.js';
+export * from './net/Chat.js';
+export * from './net/chat/UnauthMessagesService.js';
+export * from './net/chat/UnauthUsernamesService.js';
+export * from './net/Registration.js';
+export * from './net/SvrB.js';
 
 // This must match the libsignal-bridge Rust enum of the same name.
 export enum Environment {
   Staging = 0,
   Production = 1,
+}
+
+/**
+ * Build variant for remote config key selection.
+ *
+ * This must match the libsignal-bridge Rust enum of the same name.
+ *
+ * - `Production`: Use for release builds. Only uses base remote config keys without suffixes.
+ * - `Beta`: Use for all other builds (nightly, alpha, internal, public betas). Prefers
+ *   keys with a `.beta` suffix, falling back to base keys if the suffixed key is not present.
+ */
+export enum BuildVariant {
+  Production = 0,
+  Beta = 1,
 }
 
 export type ServiceAuth = {
@@ -77,6 +98,7 @@ export type NetConstructorOptions = Readonly<
       env: Environment;
       userAgent: string;
       remoteConfig?: Map<string, string>;
+      buildVariant?: BuildVariant;
     }
   | {
       localTestServer: true;
@@ -101,6 +123,28 @@ export type ProxyOptions = {
 /** The "scheme" for Signal TLS proxies. See {@link Net.setProxy()}. */
 export const SIGNAL_TLS_PROXY_SCHEME = 'org.signal.tls';
 
+type WithSuffix<Keys extends readonly string[], Suffix extends string> = {
+  [Key in keyof Keys]: `${Keys[Key]}.${Suffix}`;
+};
+
+function withSuffix<Keys extends readonly string[], Suffix extends string>(
+  keys: Keys,
+  suffix: Suffix
+): WithSuffix<Keys, Suffix> {
+  return keys.map((key) => `${key}.${suffix}`) as WithSuffix<Keys, Suffix>;
+}
+
+const BETA_REMOTE_CONFIG_KEYS = withSuffix(Native.NetRemoteConfigKeys, 'beta');
+// By convention suffix-less keys mean ".prod". These keys predate convention.
+// TODO: Remove this line once all the non-conventional keys have been removed.
+const PROD_REMOTE_CONFIG_KEYS = ['chatPermessageDeflate.prod'] as const;
+
+export const REMOTE_CONFIG_KEYS = [
+  ...Native.NetRemoteConfigKeys,
+  ...BETA_REMOTE_CONFIG_KEYS,
+  ...PROD_REMOTE_CONFIG_KEYS,
+] as const;
+
 export class Net {
   private readonly asyncContext: TokioAsyncContext;
   /** Exposed only for testing. */
@@ -121,13 +165,18 @@ export class Net {
         )
       );
     } else {
+      const {
+        env,
+        userAgent,
+        remoteConfig = new Map<string, string>(),
+        buildVariant = BuildVariant.Production,
+      } = options;
       this._connectionManager = newNativeHandle(
         Native.ConnectionManager_new(
-          options.env,
-          options.userAgent,
-          new BridgedStringMap(
-            options.remoteConfig || new Map<string, string>()
-          )
+          env,
+          userAgent,
+          new BridgedStringMap(remoteConfig),
+          buildVariant
         )
       );
     }
@@ -207,6 +256,25 @@ export class Net {
       username,
       password,
       receiveStories,
+      listener,
+      options
+    );
+  }
+
+  /**
+   * Creates a new instance of {@link ProvisioningConnection}.
+   *
+   * @param listener the listener for incoming events.
+   * @param options additional options to pass through.
+   * @param options.abortSignal an {@link AbortSignal} that will cancel the connection attempt.
+   */
+  public async connectProvisioning(
+    listener: ProvisioningConnectionListener,
+    options?: { abortSignal?: AbortSignal }
+  ): Promise<ProvisioningConnection> {
+    return ProvisioningConnection.connect(
+      this.asyncContext,
+      this._connectionManager,
       listener,
       options
     );
@@ -430,12 +498,43 @@ export class Net {
    * Only new connections made *after* this call will use the new remote config settings.
    * Existing connections are not affected.
    *
+   * @deprecated Calling without buildVariant is deprecated. Please explicitly specify BuildVariant.Production or BuildVariant.Beta.
    * @param remoteConfig A map containing preprocessed libsignal configuration keys and their associated values.
    */
-  setRemoteConfig(remoteConfig: Map<string, string>): void {
+  setRemoteConfig(
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>
+  ): void;
+  /**
+   * Updates libsignal's remote configuration settings.
+   *
+   * The provided configuration map must conform to the following requirements:
+   * - Each key represents an enabled configuration and directly indicates that the setting is enabled.
+   * - Keys must have had the platform-specific prefix (e.g., `"desktop.libsignal."`) removed.
+   * - Entries explicitly disabled by the server must not appear in the map.
+   * - Values originally set to `null` by the server must be represented as empty strings.
+   * - Values should otherwise maintain the same format as they are returned by the server.
+   *
+   * These constraints ensure configurations passed to libsignal precisely reflect enabled
+   * server-provided settings without ambiguity.
+   *
+   * Only new connections made *after* this call will use the new remote config settings.
+   * Existing connections are not affected.
+   *
+   * @param remoteConfig A map containing preprocessed libsignal configuration keys and their associated values.
+   * @param buildVariant The build variant (BuildVariant.Production or BuildVariant.Beta) that determines which remote config keys to use.
+   */
+  setRemoteConfig(
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>,
+    buildVariant: BuildVariant
+  ): void;
+  setRemoteConfig(
+    remoteConfig: ReadonlyMap<(typeof REMOTE_CONFIG_KEYS)[number], string>,
+    buildVariant: BuildVariant = BuildVariant.Production
+  ): void {
     Native.ConnectionManager_set_remote_config(
       this._connectionManager,
-      new BridgedStringMap(remoteConfig)
+      new BridgedStringMap(remoteConfig),
+      buildVariant
     );
   }
 

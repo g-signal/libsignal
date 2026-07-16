@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
+#![warn(clippy::unwrap_used)]
+
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU16;
 use std::sync::Arc;
@@ -20,10 +22,8 @@ pub mod dns;
 pub mod errors;
 pub mod host;
 pub mod http_client;
-pub mod noise;
-mod proto;
 pub mod route;
-mod stream;
+pub mod stream;
 pub mod tcp_ssl;
 #[cfg(any(test, feature = "test-util"))]
 pub mod testutil;
@@ -78,6 +78,16 @@ pub enum EnableDomainFronting {
 pub enum EnforceMinimumTls {
     Yes,
     No,
+}
+
+/// Whether to override the platform default for the Nagle algorithm via TCP_NODELAY.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum OverrideNagleAlgorithm {
+    /// Explicitly disable the Nagle algorithm (enable TCP_NODELAY).
+    OverrideToOff,
+    /// Leave the operating system's default behavior unchanged.
+    #[default]
+    UseSystemDefault,
 }
 
 /// The fully general version of [`AsStaticHttpHeader`], where the name of the header may depend on the
@@ -239,20 +249,41 @@ pub trait AsyncDuplexStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<S: AsyncRead + AsyncWrite + Unpin + Send> AsyncDuplexStream for S {}
 
 /// A single ALPN list entry.
-///
-/// Implements `AsRef<[u8]>` as the length-delimited wire form.
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum Alpn {
     Http1_1,
     Http2,
 }
 
-impl AsRef<[u8]> for Alpn {
-    fn as_ref(&self) -> &[u8] {
+impl Alpn {
+    pub const fn encoded(&self) -> &'static [u8] {
+        self.length_prefixed()
+            .split_first()
+            .expect("always has a prefix to strip")
+            .1
+    }
+
+    pub const fn length_prefixed(&self) -> &'static [u8] {
         match self {
-            Alpn::Http1_1 => b"\x08http/1.1",
-            Alpn::Http2 => b"\x02h2",
+            Self::Http1_1 => b"\x08http/1.1",
+            Self::Http2 => b"\x02h2",
         }
+    }
+}
+
+pub struct UnrecognizedAlpn;
+
+impl TryFrom<&'_ [u8]> for Alpn {
+    type Error = UnrecognizedAlpn;
+
+    fn try_from(value: &'_ [u8]) -> Result<Self, Self::Error> {
+        if value == Self::Http2.encoded() {
+            return Ok(Self::Http2);
+        }
+        if value == Self::Http1_1.encoded() {
+            return Ok(Self::Http1_1);
+        }
+        Err(UnrecognizedAlpn)
     }
 }
 

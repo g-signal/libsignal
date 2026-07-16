@@ -12,15 +12,18 @@ use std::ops::{Deref, DerefMut, RangeInclusive};
 use std::slice;
 
 use libsignal_account_keys::{AccountEntropyPool, InvalidAccountEntropyPool};
+use libsignal_message_backup::json::exporter::FrameExportResult as JsonFrameExportResult;
 use neon::prelude::*;
 use neon::types::JsBigInt;
 use paste::paste;
+use zkgroup::ZkGroupDeserializationFailure;
 
 use super::*;
 use crate::io::{InputStream, SyncInputStream};
 use crate::message_backup::MessageBackupValidationOutcome;
-use crate::net::chat::ChatListener;
-use crate::node::chat::NodeChatListener;
+use crate::net::chat::{
+    ChatListener, NodeChatListener, NodeProvisioningListener, ProvisioningListener,
+};
 use crate::support::{Array, AsType, FixedLengthBincodeSerializable, Serialized, extend_lifetime};
 
 /// Converts arguments from their JavaScript form to their Rust form.
@@ -219,6 +222,7 @@ impl<'a> AsyncArgTypeInfo<'a> for &'a [SessionRecord] {
 /// Converts result values from their Rust form to their JavaScript form.
 ///
 /// `ResultTypeInfo` is used to implement the `bridge_fn` macro, but can also be used outside it.
+/// `ResultTypeInfo` is also used for callback arguments in the `bridge_callback` macro.
 ///
 /// ```no_run
 /// # use libsignal_bridge_types::node::*;
@@ -357,6 +361,25 @@ impl SimpleArgTypeInfo for AccountEntropyPool {
         pool.parse().or_else(|e: InvalidAccountEntropyPool| {
             cx.throw_type_error(format!("bad account entropy pool: {e}"))
         })
+    }
+}
+
+impl SimpleArgTypeInfo for libsignal_net_chat::api::messages::MultiRecipientSendAuthorization {
+    type ArgType = JsValue;
+    fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
+        // If we ever have more than two options, we won't be able to just use null for one of them,
+        // but for now this is convenient.
+        if foreign.is_a::<JsNull, _>(cx) {
+            Ok(Self::Story)
+        } else {
+            let elements = foreign.downcast_or_throw::<JsUint8Array, _>(cx)?;
+            let bytes = elements.as_slice(cx);
+            let token =
+                zkgroup::deserialize(bytes).or_else(|_: ZkGroupDeserializationFailure| {
+                    cx.throw_type_error("bad GroupSendFullToken")
+                })?;
+            Ok(Self::Group(token))
+        }
     }
 }
 
@@ -722,35 +745,19 @@ bridge_trait!(SignedPreKeyStore);
 bridge_trait!(KyberPreKeyStore);
 bridge_trait!(InputStream);
 
-impl<'storage, 'context: 'storage> ArgTypeInfo<'storage, 'context> for Box<dyn ChatListener> {
+impl SimpleArgTypeInfo for Box<dyn ChatListener> {
     type ArgType = JsObject;
-    type StoredType = NodeChatListener;
 
-    fn borrow(
-        cx: &mut FunctionContext<'context>,
-        foreign: Handle<'context, Self::ArgType>,
-    ) -> NeonResult<Self::StoredType> {
-        NodeChatListener::new(cx, foreign)
-    }
-
-    fn load_from(stored: &'storage mut Self::StoredType) -> Self {
-        stored.make_listener()
+    fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
+        Ok(Box::new(NodeChatListener::new(cx, foreign)?))
     }
 }
 
-impl<'a> AsyncArgTypeInfo<'a> for Box<dyn ChatListener> {
+impl SimpleArgTypeInfo for Box<dyn ProvisioningListener> {
     type ArgType = JsObject;
-    type StoredType = NodeChatListener;
 
-    fn save_async_arg(
-        cx: &mut FunctionContext,
-        foreign: Handle<Self::ArgType>,
-    ) -> NeonResult<Self::StoredType> {
-        NodeChatListener::new(cx, foreign)
-    }
-
-    fn load_async_arg(stored: &'a mut Self::StoredType) -> Self {
-        stored.make_listener()
+    fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
+        Ok(Box::new(NodeProvisioningListener::new(cx, foreign)?))
     }
 }
 
@@ -937,17 +944,31 @@ impl<'a> ResultTypeInfo<'a> for Vec<u8> {
     }
 }
 
+impl<'a> ResultTypeInfo<'a> for bytes::Bytes {
+    type ResultType = JsUint8Array;
+    fn convert_into(self, cx: &mut impl Context<'a>) -> NeonResult<Handle<'a, Self::ResultType>> {
+        JsUint8Array::from_slice(cx, &self)
+    }
+}
+
+impl<'a> ResultTypeInfo<'a> for &[&str] {
+    type ResultType = JsArray;
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        make_array(cx, self.iter().copied())
+    }
+}
+
 impl<'a> ResultTypeInfo<'a> for Box<[String]> {
     type ResultType = JsArray;
     fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
-        make_array(cx, self.into_vec())
+        make_array(cx, self)
     }
 }
 
 impl<'a> ResultTypeInfo<'a> for Box<[Vec<u8>]> {
     type ResultType = JsArray;
     fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
-        make_array(cx, self.into_vec())
+        make_array(cx, self)
     }
 }
 
@@ -1035,6 +1056,18 @@ impl<'a> ResultTypeInfo<'a> for () {
     }
 }
 
+impl<'a, A: ResultTypeInfo<'a>, B: ResultTypeInfo<'a>> ResultTypeInfo<'a> for (A, B) {
+    type ResultType = JsArray;
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        let a = self.0.convert_into(cx)?;
+        let b = self.1.convert_into(cx)?;
+        let result = cx.empty_array();
+        result.set(cx, 0, a)?;
+        result.set(cx, 1, b)?;
+        Ok(result)
+    }
+}
+
 impl<'a> ResultTypeInfo<'a> for MessageBackupValidationOutcome {
     type ResultType = JsObject;
 
@@ -1051,6 +1084,39 @@ impl<'a> ResultTypeInfo<'a> for MessageBackupValidationOutcome {
         obj.set(cx, "unknownFieldMessages", unknown_field_messages)?;
 
         Ok(obj)
+    }
+}
+
+impl<'a> ResultTypeInfo<'a> for JsonFrameExportResult {
+    type ResultType = JsObject;
+
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        let JsonFrameExportResult {
+            line,
+            validation_error,
+        } = self;
+
+        let js_result = JsObject::new(cx);
+
+        if let Some(line) = line {
+            let line_value = cx.string(&line);
+            js_result.set(cx, "line", line_value)?;
+        }
+
+        if let Some(error) = validation_error {
+            let message = cx.string(error.to_string());
+            js_result.set(cx, "errorMessage", message)?;
+        }
+
+        Ok(js_result)
+    }
+}
+
+impl<'a> ResultTypeInfo<'a> for Box<[JsonFrameExportResult]> {
+    type ResultType = JsArray;
+
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        make_array(cx, self.into_vec())
     }
 }
 
@@ -1189,6 +1255,30 @@ impl<'a> ResultTypeInfo<'a> for Box<[libsignal_net_chat::api::ChallengeOption]> 
     }
 }
 
+impl<'a> ResultTypeInfo<'a> for libsignal_net_chat::api::messages::MismatchedDeviceError {
+    type ResultType = JsObject;
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        let js_account = self.account.convert_into(cx)?;
+        let js_missing_devices = make_array(cx, self.missing_devices.into_iter().map(u32::from))?;
+        let js_extra_devices = make_array(cx, self.extra_devices.into_iter().map(u32::from))?;
+        let js_stale_devices = make_array(cx, self.stale_devices.into_iter().map(u32::from))?;
+
+        let result = JsObject::new(cx);
+        result.set(cx, "account", js_account)?;
+        result.set(cx, "missingDevices", js_missing_devices)?;
+        result.set(cx, "extraDevices", js_extra_devices)?;
+        result.set(cx, "staleDevices", js_stale_devices)?;
+        Ok(result)
+    }
+}
+
+impl<'a> ResultTypeInfo<'a> for Vec<ServiceId> {
+    type ResultType = JsArray;
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        make_array(cx, self)
+    }
+}
+
 impl<'a> ResultTypeInfo<'a>
     for Box<[libsignal_net_chat::api::registration::RegisterResponseBadge]>
 {
@@ -1246,6 +1336,17 @@ impl<'a> ResultTypeInfo<'a>
         let entries = entries.as_value(cx);
 
         map_constructor.construct(cx, [entries])
+    }
+}
+
+impl<'a> ResultTypeInfo<'a> for libsignal_net::chat::server_requests::DisconnectCause {
+    type ResultType = JsValue;
+
+    fn convert_into(self, cx: &mut impl Context<'a>) -> JsResult<'a, Self::ResultType> {
+        match self {
+            Self::LocalDisconnect => Ok(cx.null().upcast()),
+            Self::Error(err) => Ok(err.into_throwable(cx, "DisconnectCause").upcast()),
+        }
     }
 }
 

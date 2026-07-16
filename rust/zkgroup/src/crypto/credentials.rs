@@ -11,6 +11,7 @@ use const_str::hex;
 use curve25519_dalek_signal::constants::RISTRETTO_BASEPOINT_POINT;
 use curve25519_dalek_signal::ristretto::RistrettoPoint;
 use curve25519_dalek_signal::scalar::Scalar;
+use derive_where::derive_where;
 use partial_default::PartialDefault;
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +27,9 @@ use crate::{
     NUM_AUTH_CRED_ATTRIBUTES, NUM_PROFILE_KEY_CRED_ATTRIBUTES, NUM_RECEIPT_CRED_ATTRIBUTES,
 };
 
-static SYSTEM_PARAMS: LazyLock<SystemParams> =
-    LazyLock::new(|| crate::deserialize::<SystemParams>(SystemParams::SYSTEM_HARDCODED).unwrap());
+static SYSTEM_PARAMS: LazyLock<SystemParams> = LazyLock::new(|| {
+    crate::deserialize(SystemParams::SYSTEM_HARDCODED).expect("valid hardcoded params")
+});
 
 const NUM_SUPPORTED_ATTRS: usize = 6;
 #[derive(Copy, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +91,7 @@ impl AttrScalars for PniCredential {
 
 #[derive(Serialize, Deserialize, PartialDefault)]
 #[partial_default(bound = "S::Storage: Default")]
+#[derive_where(Clone, Copy, PartialEq, Eq; S: AttrScalars)]
 pub struct KeyPair<S: AttrScalars> {
     // private
     pub(crate) w: Scalar,
@@ -102,29 +105,6 @@ pub struct KeyPair<S: AttrScalars> {
     pub(crate) C_W: RistrettoPoint,
     pub(crate) I: RistrettoPoint,
 }
-
-impl<S: AttrScalars> Clone for KeyPair<S> {
-    fn clone(&self) -> Self {
-        // Rely on Copy
-        *self
-    }
-}
-
-impl<S: AttrScalars> Copy for KeyPair<S> {}
-
-impl<S: AttrScalars> PartialEq for KeyPair<S> {
-    fn eq(&self, other: &Self) -> bool {
-        self.w == other.w
-            && self.wprime == other.wprime
-            && self.W == other.W
-            && self.x0 == other.x0
-            && self.x1 == other.x1
-            && self.y == other.y
-            && self.C_W == other.C_W
-            && self.I == other.I
-    }
-}
-impl<S: AttrScalars> Eq for KeyPair<S> {}
 
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, PartialDefault)]
 pub struct PublicKey {

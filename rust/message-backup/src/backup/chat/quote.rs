@@ -32,6 +32,7 @@ pub enum QuoteType {
     Normal,
     GiftBadge,
     ViewOnce,
+    Poll,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -87,10 +88,20 @@ impl<R: Clone, C: LookupPair<RecipientId, MinimalRecipientData, R> + ReportUnusu
             return Err(QuoteError::AuthorNotFound(author_id));
         };
         let author = match author_data {
-            MinimalRecipientData::Contact { e164: None, aci: None, pni: _ } => {
+            MinimalRecipientData::Contact {
+                e164: None,
+                aci: None,
+                pni: _,
+                username: _,
+            } => {
                 Err(QuoteError::AuthorHasNoAciOrE164(author_id))
             }
-            MinimalRecipientData::Contact { e164: _, aci: _, pni: _ } => {
+            MinimalRecipientData::Contact {
+                e164: _,
+                aci: _,
+                pni: _,
+                username: _,
+            } => {
                 Ok(author.clone())
             }
             MinimalRecipientData::Self_
@@ -119,6 +130,7 @@ impl<R: Clone, C: LookupPair<RecipientId, MinimalRecipientData, R> + ReportUnusu
             }
             proto::quote::Type::GIFT_BADGE => QuoteType::GiftBadge,
             proto::quote::Type::VIEW_ONCE => QuoteType::ViewOnce,
+            proto::quote::Type::POLL => QuoteType::Poll,
         };
 
         let text = text.into_option().map(|text| text.try_into()).transpose()?;

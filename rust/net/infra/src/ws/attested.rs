@@ -19,6 +19,14 @@ use crate::ws::error::{ProtocolError, SpaceError, UnexpectedCloseError};
 use crate::ws::{NextOrClose, TextOrBinary, WebSocketError, WebSocketStreamLike};
 
 /// Encrypted connection to an attested host.
+///
+/// An established websocket connection to server whose message contents are
+/// encrypted via Noise. The actual implementation starts a background task
+/// to handle communication that it communicates with via [`mpsc`] channels.
+///
+/// Since the actual protocol used to communicate with attested hosts is
+/// request-reply oriented, all the async methods on this class can take a
+/// `&mut Self`.
 #[derive(Debug)]
 pub struct AttestedConnection {
     ws_client: WsClient,
@@ -46,15 +54,6 @@ impl From<attest::client_connection::Error> for AttestedConnectionError {
     fn from(value: attest::client_connection::Error) -> Self {
         Self::Attestation(value.into())
     }
-}
-
-pub async fn run_attested_interaction<C: AsMut<AttestedConnection>, B: AsRef<[u8]>>(
-    connection: &mut C,
-    bytes: B,
-) -> Result<NextOrClose<Vec<u8>>, AttestedConnectionError> {
-    let connection = connection.as_mut();
-    connection.send_bytes(bytes.as_ref()).await?;
-    connection.receive_bytes().await
 }
 
 /// The number of messages the client can buffer outside of the websocket.
@@ -149,12 +148,13 @@ impl AttestedConnection {
     }
 }
 
-impl AsMut<Self> for AttestedConnection {
-    fn as_mut(&mut self) -> &mut Self {
-        self
-    }
-}
-
+/// Communicates with a [`super::Connection`] running on a background task.
+///
+/// This type does *not* implement [`futures_util::Sink`] or
+/// [`futures_util::Stream`] because the former would require using
+/// [`tokio_util::sync::PollSender`] which adds an extra layer of dynamic
+/// dispatch, and breaking symmetry by implementing the latter doesn't seem
+/// worth it.
 #[derive(Debug)]
 struct WsClient {
     outgoing_tx: mpsc::Sender<(TextOrBinary, oneshot::Sender<Result<(), SendError>>)>,
@@ -483,6 +483,7 @@ impl From<SendError> for AttestedConnectionError {
 }
 
 #[cfg(any(test, feature = "test-util"))]
+#[allow(clippy::unwrap_used)]
 pub mod testutil {
 
     use futures_util::{SinkExt as _, StreamExt as _};

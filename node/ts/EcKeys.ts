@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../Native';
+import * as Native from './Native.js';
 
 export class PublicKey {
   readonly _nativeHandle: Native.PublicKey;
@@ -142,8 +142,7 @@ export class IdentityKeyPair {
   }
 
   static deserialize(buffer: Uint8Array): IdentityKeyPair {
-    const { privateKey, publicKey } =
-      Native.IdentityKeyPair_Deserialize(buffer);
+    const [publicKey, privateKey] = Native.IdentityKeyPair_Deserialize(buffer);
     return new IdentityKeyPair(
       PublicKey._fromNativeHandle(publicKey),
       PrivateKey._fromNativeHandle(privateKey)

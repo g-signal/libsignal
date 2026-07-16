@@ -53,10 +53,11 @@ fn bench_verify_search(c: &mut Criterion) {
         tree_head: response_tree_head,
     };
 
-    let valid_at = SystemTime::UNIX_EPOCH + Duration::from_secs(1757956750);
+    let valid_at = SystemTime::UNIX_EPOCH + include!("../res/chat_response_valid_at.in");
+
     let kt = KeyTransparency {
         config: PublicConfig {
-            mode: DeploymentMode::ThirdPartyAuditing(auditor_key),
+            mode: DeploymentMode::ThirdPartyAuditing(vec![auditor_key].into()),
             signature_key: sig_key,
             vrf_key,
         },

@@ -2,12 +2,13 @@
 name = "libsignal-net"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors.workspace = true
 license.workspace = true
 
 [features]
 test-util = ["libsignal-net-infra/test-util"]
+tower-service = ["libsignal-net-infra/tower-service"]
 
 [lints]
 workspace = true
@@ -23,6 +24,7 @@ libsignal-protocol = { workspace = true }
 libsignal-svrb = { workspace = true }
 signal-crypto = { workspace = true }
 
+assert_matches = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 bincode = { workspace = true }
@@ -52,7 +54,6 @@ scopeguard = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-snow = { workspace = true, default-features = false }
 static_assertions = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
@@ -61,7 +62,8 @@ tokio = { workspace = true, features = ["rt", "time", "macros"] }
 tokio-boring-signal = { workspace = true }
 tokio-stream = { workspace = true, features = ["sync"] }
 tokio-tungstenite = { workspace = true }
-tungstenite = { workspace = true, features = ["deflate"] }
+tonic = { workspace = true, default-features = false }
+tungstenite = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 visibility = { workspace = true }
 zerocopy = { workspace = true }
@@ -72,19 +74,19 @@ prost-build = { workspace = true }
 [dev-dependencies]
 libsignal-net = { path = ".", features = ["test-util"] }
 
-assert_matches = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 either = { workspace = true }
 env_logger = { workspace = true }
 futures = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 proptest = { workspace = true }
 rand_chacha = { workspace = true }
-snow = { workspace = true, default-features = true }
 test-case = { workspace = true }
 test-log = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "io-std", "rt-multi-thread"] }
 url = { workspace = true }
-warp = { workspace = true, features = ["tls"] }
+warp = { workspace = true, features = ["server", "websocket"] }
 
 [[example]]
 name = "chat_smoke_test"

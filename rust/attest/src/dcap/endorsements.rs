@@ -106,9 +106,12 @@ impl TryFrom<&[u8]> for SgxEndorsements {
 
         let (offsets, data) = src.split_at(offsets_required_size);
 
+        let (offsets, offsets_remainder) = offsets.as_chunks::<{ std::mem::size_of::<u32>() }>();
+        // offsets_required_size is a multiple of std::mem::size_of::<u32>
+        assert!(offsets_remainder.is_empty());
         let offsets = offsets
-            .chunks_exact(4)
-            .map(|d| u32::from_le_bytes(d.try_into().expect("correct size")) as usize)
+            .iter()
+            .map(|d| u32::from_le_bytes(*d) as usize)
             .collect::<Vec<usize>>();
 
         validate_offsets(&offsets, data)?;
@@ -304,13 +307,9 @@ mod tests {
 
     #[test]
     fn make_endorsements_header() {
-        let data: [u8; std::mem::size_of::<EndorsementsHeader>()] =
-            include_bytes!("../../tests/data/dcap.endorsements")
-                [..std::mem::size_of::<EndorsementsHeader>()]
-                .try_into()
-                .unwrap();
-
-        let header = EndorsementsHeader::read_from_bytes(&data).expect("failed to parse header");
+        let data: &[u8] = include_bytes!("../../tests/data/dcap.endorsements");
+        let (header, _remaining) =
+            EndorsementsHeader::read_from_prefix(data).expect("failed to parse header");
 
         assert_eq!(1, header.version.get());
         assert_eq!(2, header.enclave_type.get()) // oe_enclave_type_t (include/openenclave/bits/types.h)

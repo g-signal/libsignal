@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../Native';
+import * as Native from './Native.js';
 
 import * as uuid from 'uuid';
+import { Buffer } from 'node:buffer';
 
 export enum ServiceIdKind {
   Aci = 0,

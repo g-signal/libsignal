@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../Native';
+import { Buffer } from 'node:buffer';
+
+import * as Native from './Native.js';
 
 /**
  * A single recipient parsed from a {@link SealedSenderMultiRecipientMessage}.

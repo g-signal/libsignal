@@ -4,19 +4,21 @@
 //
 
 import { assert, expect, use } from 'chai';
-import { randomBytes } from 'crypto';
-import * as chaiAsPromised from 'chai-as-promised';
+import chaiAsPromised from 'chai-as-promised';
+import { Buffer } from 'node:buffer';
+import { randomBytes } from 'node:crypto';
+import * as stream from 'node:stream';
+
 import {
   chunkSizeInBytes,
   DigestingPassThrough,
   everyNthByte,
   inferChunkSize,
   ValidatingPassThrough,
-} from '../incremental_mac';
-import { ErrorCode, LibSignalErrorBase } from '../Errors';
+} from '../incremental_mac.js';
+import { ErrorCode, LibSignalErrorBase } from '../Errors.js';
 
-import * as stream from 'stream';
-import { assertArrayEquals } from './util';
+import { assertArrayEquals } from './util.js';
 
 use(chaiAsPromised);
 
@@ -188,6 +190,16 @@ describe('Incremental MAC', () => {
       )) as LibSignalErrorBase;
       assert.equal(error.code, ErrorCode.IncrementalMacVerificationFailed);
       assert.equal(error.message, 'Corrupted input data');
+    });
+
+    it('handles an invalid digest', () => {
+      const badDigest = Buffer.of(1);
+      expect(
+        () =>
+          new ValidatingPassThrough(TEST_KEY, inferChunkSize(1000), badDigest)
+      )
+        .to.throw(LibSignalErrorBase)
+        .with.property('code', ErrorCode.IncrementalMacVerificationFailed);
     });
   });
 });

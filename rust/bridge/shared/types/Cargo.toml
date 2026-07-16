@@ -9,6 +9,7 @@ version = "0.1.0"
 authors.workspace = true
 license.workspace = true
 edition = "2024"
+rust-version.workspace = true
 
 [lints]
 workspace = true
@@ -17,9 +18,10 @@ workspace = true
 attest = { workspace = true }
 device-transfer = { workspace = true }
 libsignal-account-keys = { workspace = true }
+libsignal-bridge-macros = { workspace = true }
 libsignal-core = { workspace = true }
 libsignal-keytrans = { workspace = true }
-libsignal-message-backup = { workspace = true }
+libsignal-message-backup = { workspace = true, features = ["json"] }
 libsignal-net = { workspace = true }
 libsignal-net-chat = { workspace = true }
 libsignal-protocol = { workspace = true }
@@ -34,8 +36,9 @@ assert_matches = { workspace = true }
 async-trait = { workspace = true }
 atomic-take = { workspace = true }
 bytes = { workspace = true }
+const-str = { workspace = true }
 derive-where = { workspace = true }
-derive_more = { workspace = true, features = ["deref", "from", "into"] }
+derive_more = { workspace = true, features = ["deref", "deref_mut", "from", "into"] }
 displaydoc = { workspace = true }
 futures-util = { workspace = true }
 hmac = { workspace = true }
@@ -46,14 +49,17 @@ mediasan-common = { workspace = true }
 once_cell = { workspace = true }
 partial-default = { workspace = true }
 paste = { workspace = true }
+rand = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 static_assertions = { workspace = true }
+strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 uuid = { workspace = true }
 visibility = { workspace = true }
+zerocopy = { workspace = true }
 
 # Enable this for all libsignal app language libraries
 subtle = { workspace = true, features = ["core_hint_black_box"] }
@@ -62,8 +68,6 @@ jni = { workspace = true, optional = true }
 linkme = { workspace = true, optional = true }
 neon = { workspace = true, optional = true, default-features = false, features = ["napi-6"] }
 signal-neon-futures = { workspace = true, optional = true }
-strum = { workspace = true }
-zerocopy = { workspace = true, optional = true }
 
 [dev-dependencies]
 test-case = { workspace = true }
@@ -71,7 +75,7 @@ tokio = { workspace = true, features = ["test-util", "time", "macros"] }
 
 [features]
 ffi = []
-jni = ["dep:jni", "zerocopy"]
+jni = ["dep:jni"]
 jni-type-tagging = []
 jni-invoke-annotated = []
 extra-jni-checks = ["jni-type-tagging", "jni-invoke-annotated"]

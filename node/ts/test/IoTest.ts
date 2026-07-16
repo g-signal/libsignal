@@ -4,11 +4,12 @@
 //
 
 import { use } from 'chai';
-import * as chaiAsPromised from 'chai-as-promised';
+import chaiAsPromised from 'chai-as-promised';
+import { Buffer } from 'node:buffer';
 
-import * as Native from '../../Native';
-import { Uint8ArrayInputStream } from './ioutil';
-import { assertArrayEquals } from './util';
+import * as Native from '../Native.js';
+import { Uint8ArrayInputStream } from './ioutil.js';
+import { assertArrayEquals } from './util.js';
 
 use(chaiAsPromised);
 

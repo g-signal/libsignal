@@ -1,4 +1,4 @@
-name: Upload Java libraries to Sonatype
+name: "Release - Java"
 run-name: ${{ github.workflow }} (${{ github.ref_name }})
 
 on:
@@ -24,10 +24,10 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-15]
+        os: [windows-latest-8-cores, macos-15-xlarge]
         include:
-          - os: windows-latest
-          - os: macos-15
+          - os: windows-latest-8-cores
+          - os: macos-15-xlarge
             additional-rust-target: x86_64-apple-darwin
         # Ubuntu binaries are built using Docker, below
 
@@ -52,9 +52,9 @@ jobs:
               core.setFailed("the action should either be launched on a tag or with a 'dry run' switch");
             }
 
-      - run: rustup toolchain install $(cat rust-toolchain) --profile minimal
+      - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal
 
-      - run: rustup target add ${{ matrix.additional-rust-target }}
+      - run: rustup target add "${{ matrix.additional-rust-target }}"
         if: ${{ matrix.additional-rust-target != '' }}
 
       # install nasm compiler for boring
@@ -64,7 +64,7 @@ jobs:
         shell: cmd
 
       - run: choco install protoc
-        if: matrix.os == 'windows-latest'
+        if: startsWith(matrix.os, 'windows-')
 
       - run: brew install protobuf
         if: startsWith(matrix.os, 'macos-')
@@ -116,11 +116,11 @@ jobs:
         with:
           submodules: recursive
 
-      - run: rustup toolchain install $(cat rust-toolchain) --profile minimal
+      - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal
 
       - run: sudo apt-get update && sudo apt-get install protobuf-compiler
 
-      - run: cargo +stable install cbindgen
+      - run: cargo +stable install --version "$(cat .cbindgen-version)" --locked cbindgen
 
       - name: Verify that the JNI bindings are up to date
         run: rust/bridge/jni/bin/gen_java_decl.py --verify
@@ -128,7 +128,12 @@ jobs:
   publish:
     name: Build for production and publish
 
-    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Needed for google-github-actions/auth.
+      id-token: write
+
+    runs-on: ubuntu-latest-8-cores
 
     needs: [build, verify-rust]
 

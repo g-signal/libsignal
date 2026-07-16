@@ -150,30 +150,29 @@ impl<T: for<'a> ResultTypeInfo<'a> + std::panic::UnwindSafe, U> ResultReporter
                 let future_for_convert = &future;
                 let stack_elements_for_convert = &future_creation_stack_trace_elements;
                 maybe_error.unwrap_or_else(move |error| {
-                    convert_to_exception(env, error, move |env, throwable, error| {
-                        throwable
-                            .and_then(move |throwable| {
-                                call_method_checked(
-                                    env,
-                                    &throwable,
-                                    "setStackTrace",
-                                    jni_args!((stack_elements_for_convert => [java.lang.StackTraceElement]) -> void),
-                                )?;
+                    let throwable = error.to_throwable(env);
+                    throwable
+                        .and_then(move |throwable| {
+                            call_method_checked(
+                                env,
+                                &throwable,
+                                "setStackTrace",
+                                jni_args!((stack_elements_for_convert => [java.lang.StackTraceElement]) -> void),
+                            )?;
 
-                                _ = call_method_checked(
-                                    env,
-                                    future_for_convert,
-                                    "completeExceptionally",
-                                    jni_args!((throwable => java.lang.Throwable) -> boolean),
-                                )?;
-                                Ok(())
-                            })
-                            .unwrap_or_else(|completion_error| {
-                                log::error!(
-                                    "failed to complete Future with error \"{error}\": {completion_error}"
-                                );
-                            });
-                    })
+                            _ = call_method_checked(
+                                env,
+                                future_for_convert,
+                                "completeExceptionally",
+                                jni_args!((throwable => java.lang.Throwable) -> boolean),
+                            )?;
+                            Ok(())
+                        })
+                        .unwrap_or_else(|completion_error| {
+                            log::error!(
+                                "failed to complete Future with error \"{error}\": {completion_error}"
+                            );
+                        });
                 });
 
                 // Explicitly drop these while the thread is still attached to the JVM.
@@ -210,7 +209,7 @@ impl<T: for<'a> ResultTypeInfo<'a> + std::panic::UnwindSafe, U> ResultReporter
 /// # use libsignal_bridge_types::jni::*;
 /// # use libsignal_bridge_types::support::NoOpAsyncRuntime;
 /// # fn test(env: &mut JNIEnv, async_runtime: &NoOpAsyncRuntime) -> SignalJniResult<()> {
-/// let java_future = run_future_on_runtime(env, async_runtime, |_cancel| async {
+/// let java_future = run_future_on_runtime(env, async_runtime, "task", |_cancel| async {
 ///     let result: i32 = 1 + 2;
 ///     // Do some complicated awaiting here.
 ///     FutureResultReporter::new(Ok(result), ())
@@ -220,6 +219,7 @@ impl<T: for<'a> ResultTypeInfo<'a> + std::panic::UnwindSafe, U> ResultReporter
 pub fn run_future_on_runtime<'local, R, F, O>(
     env: &mut JNIEnv<'local>,
     runtime: &R,
+    label: &'static str,
     future: impl FnOnce(R::Cancellation) -> F,
 ) -> SignalJniResult<JavaCompletableFuture<'local, <O as ResultTypeInfo<'local>>::ResultType>>
 where
@@ -236,7 +236,7 @@ where
     )?;
 
     let completer = FutureCompleter::new(env, &java_future)?;
-    let cancellation_token = runtime.run_future(future, completer);
+    let cancellation_token = runtime.run_future(future, completer, label);
     if let CancellationId::Id(cancellation_id) = cancellation_token {
         call_method_checked(
             env,

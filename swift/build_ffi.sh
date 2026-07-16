@@ -81,6 +81,7 @@ export CARGO_PROFILE_RELEASE_DEBUG=1 # enable line tables
 if [[ -n "${CARGO_BUILD_TARGET:-}" ]]; then
   # Avoid overriding RUSTFLAGS for host builds, because that resets the incremental build.
   RUSTFLAGS="--cfg aes_armv8 ${RUSTFLAGS:-}" # Enable ARMv8 cryptography acceleration when available
+  RUSTFLAGS="--cfg tokio_unstable ${RUSTFLAGS:-}" # Access tokio's unstable metrics
   RUSTFLAGS="$(rust_remap_path_options) ${RUSTFLAGS:-}" # Strip absolute paths
   export RUSTFLAGS
 fi
@@ -155,7 +156,16 @@ FFI_TESTING_HEADER_PATH=swift/Sources/SignalFfi/signal_ffi_testing.h
 
 if [[ -n "${SHOULD_CBINDGEN}" ]]; then
   check_cbindgen
-  cbindgen --version
+
+  echo "Checking cbindgen version"
+  VERSION=$(cbindgen --version)
+  echo "Found $VERSION"
+
+  EXPECTED_VERSION=$(cat .cbindgen-version)
+  if [ "$VERSION" != "cbindgen $EXPECTED_VERSION" ]; then
+    echo "warning: this script expects cbindgen version $EXPECTED_VERSION, but $VERSION is installed" >&2
+  fi
+
   if [[ -n "${CBINDGEN_VERIFY}" ]]; then
     echo diff -u "${FFI_HEADER_PATH}" "<(cbindgen -q ${RELEASE_BUILD:+--profile release} rust/bridge/ffi)"
     if ! diff -u "${FFI_HEADER_PATH}"  <(cbindgen -q ${RELEASE_BUILD:+--profile release} rust/bridge/ffi); then

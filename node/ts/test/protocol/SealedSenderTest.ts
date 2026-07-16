@@ -3,13 +3,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-/* eslint-disable @typescript-eslint/require-await */
-
-import * as SignalClient from '../../index';
-import * as util from '../util';
+import * as SignalClient from '../../index.js';
+import * as util from '../util.js';
 
 import { assert, use } from 'chai';
-import * as chaiAsPromised from 'chai-as-promised';
+import chaiAsPromised from 'chai-as-promised';
+import { Buffer } from 'node:buffer';
+
 import {
   InMemoryIdentityKeyStore,
   InMemoryKyberPreKeyStore,
@@ -17,7 +17,7 @@ import {
   InMemorySenderKeyStore,
   InMemorySessionStore,
   InMemorySignedPreKeyStore,
-} from './TestStores';
+} from './TestStores.js';
 
 use(chaiAsPromised);
 util.initLogger();
@@ -126,8 +126,7 @@ describe('SealedSender', () => {
       bPreKeyBundle,
       bAddress,
       aSess,
-      aKeys,
-      SignalClient.UsePQRatchet.Yes
+      aKeys
     );
 
     const aPlaintext = Buffer.from('hi there', 'utf8');
@@ -151,8 +150,7 @@ describe('SealedSender', () => {
       bKeys,
       bPreK,
       bSPreK,
-      bKyberStore,
-      SignalClient.UsePQRatchet.Yes
+      bKyberStore
     );
 
     assert(bPlaintext != null);
@@ -311,8 +309,7 @@ describe('SealedSender', () => {
       bPreKeyBundle,
       sharedAddress,
       aSess,
-      sharedKeys,
-      SignalClient.UsePQRatchet.Yes
+      sharedKeys
     );
 
     const aPlaintext = Buffer.from('hi there', 'utf8');
@@ -337,8 +334,7 @@ describe('SealedSender', () => {
         sharedKeys,
         bPreK,
         bSPreK,
-        bKyberStore,
-        SignalClient.UsePQRatchet.Yes
+        bKyberStore
       );
       assert.fail();
     } catch (e) {
@@ -453,8 +449,7 @@ describe('SealedSender', () => {
       bPreKeyBundle,
       bAddress,
       aSess,
-      aKeys,
-      SignalClient.UsePQRatchet.Yes
+      aKeys
     );
 
     const aAddress = SignalClient.ProtocolAddress.new(aUuid, aDeviceId);
@@ -616,8 +611,7 @@ describe('SealedSender', () => {
       bPreKeyBundle,
       bAddress,
       aSess,
-      aKeys,
-      SignalClient.UsePQRatchet.Yes
+      aKeys
     );
 
     const aAddress = SignalClient.ProtocolAddress.new(aUuid, aDeviceId);
@@ -754,8 +748,7 @@ describe('SealedSender', () => {
       bPreKeyBundle,
       bAddress,
       aSess,
-      aKeys,
-      SignalClient.UsePQRatchet.Yes
+      aKeys
     );
 
     const aAddress = SignalClient.ProtocolAddress.new(aUuid, aDeviceId);

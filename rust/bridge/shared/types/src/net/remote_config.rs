@@ -6,6 +6,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use strum::{EnumCount, IntoEnumIterator};
+
 /// Signal's Remote Config provides an interface for clients to access feature flags and configuration values for
 /// progressive rollouts and emergency rollbacks.
 ///
@@ -24,10 +26,17 @@ use std::sync::Arc;
 /// - Entries with `'isEnabled': false` are discarded.
 /// - For enabled entries, `null` values are replaced by an empty string.
 ///
-/// After preprocessing, the resulting data is passed to us as a `HashMap<String, String>` called `raw_map`.
+/// After preprocessing, the resulting data is passed to us as a `HashMap<String, Arc<str>>`.
 ///
-/// **Important notes:**
-/// - The presence of a key in `raw_map` directly indicates the configuration is enabled.
+/// ## Build Variants
+///
+/// Beta builds look for keys with a `.beta` suffix first, falling back to the regular key:
+/// - Beta: tries `"chatPermessageDeflate.beta"`, falls back to `"chatPermessageDeflate"`
+/// - Production: only uses `"chatPermessageDeflate"`
+///
+/// ## Important notes
+///
+/// - The presence of a key directly indicates the configuration is enabled.
 /// - A configuration value may be an empty string if no explicit value is provided.
 ///
 /// Due to this preprocessing, we **cannot support default values**:
@@ -35,38 +44,73 @@ use std::sync::Arc;
 ///   and keys explicitly disabled by the server (excluded during preprocessing).
 ///
 /// This struct provides methods to conveniently determine if a configuration is enabled and to access its associated value.
-pub struct RemoteConfig {
-    raw_map: HashMap<String, Arc<str>>,
+pub struct RemoteConfig<Key = RemoteConfigKey> {
+    inner: HashMap<Key, Arc<str>>,
 }
 
-#[derive(Copy, Clone)]
+/// Build variant for remote config key selection.
+///
+/// - `Production`: Use for release builds. Only uses base remote config keys without suffixes.
+/// - `Beta`: Use for all other builds (nightly, alpha, internal, public betas). Prefers
+///   keys with a `.beta` suffix, falling back to base keys if the suffixed key is not present.
+#[repr(u8)]
+#[derive(Copy, Clone, derive_more::TryFrom)]
+#[try_from(repr)]
+pub enum BuildVariant {
+    Production = 0,
+    Beta = 1,
+}
+
+pub trait HasRawKey {
+    fn raw(&self) -> &'static str;
+}
+
+macro_rules! define_keys {
+    (
+        $(#[$m:meta])*
+        $v:vis enum RemoteConfigKey {
+            $(
+                $(#[$attrs:meta])*
+                $name:ident => $key:expr $(,)?
+            )*
+        }
+    ) => {
+        $(#[$m])*
+        $v enum RemoteConfigKey {
+            $($(#[$attrs])* $name,)*
+        }
+
+        impl RemoteConfigKey {
+            #[doc = concat!("ts: export const NetRemoteConfigKeys = [", $("'", $key, "', "),* ,"] as const;")]
+            pub const KEYS: &[&str] = &[$($key),*];
+        }
+
+        impl HasRawKey for RemoteConfigKey {
+            fn raw(&self) -> &'static str {
+                match self {
+                    $(Self::$name => $key,)*
+                }
+            }
+        }
+    };
+}
+
+define_keys! {
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, strum::EnumCount, strum::EnumIter)]
 pub enum RemoteConfigKey {
     /// How long to wait for a response to a chat request before checking whether the connection is
     /// still active.
-    ChatRequestConnectionCheckTimeoutMilliseconds,
-    /// Whether or not to enforce the hardcoded minimum TLS versions for Chat and CDSI endpoints.
-    // TODO: Remove after enforcement has been enabled in production long enough without reported
-    // issues.
-    EnforceMinimumTls,
-    /// Determines whether a chat websocket connection attempts to negotiate permessage-deflate support.
-    EnableChatPermessageDeflate,
+    ChatRequestConnectionCheckTimeoutMilliseconds => "chatRequestConnectionCheckTimeoutMillis",
+    /// Whether to disable the Nagle algorithm (sets TCP_NODELAY).
+    DisableNagleAlgorithm => "disableNagleAlgorithm",
+    /// If set, unauth chat connections (only!) will connect over H2.
+    UseH2ForUnauthChat => "useH2ForUnauthChat"
+}
 }
 
 pub enum RemoteConfigValue {
     Disabled,
     Enabled(Arc<str>),
-}
-
-impl RemoteConfigKey {
-    fn raw(&self) -> &'static str {
-        match self {
-            Self::ChatRequestConnectionCheckTimeoutMilliseconds => {
-                "chatRequestConnectionCheckTimeoutMillis"
-            }
-            Self::EnforceMinimumTls => "enforceMinimumTls",
-            Self::EnableChatPermessageDeflate => "chatPermessageDeflate",
-        }
-    }
 }
 
 impl std::fmt::Display for RemoteConfigKey {
@@ -75,19 +119,37 @@ impl std::fmt::Display for RemoteConfigKey {
     }
 }
 
-impl RemoteConfig {
-    pub fn new(raw_map: HashMap<String, Arc<str>>) -> Self {
-        Self { raw_map }
+impl<Key> RemoteConfig<Key>
+where
+    Key: EnumCount + IntoEnumIterator + PartialEq + Eq + std::hash::Hash + HasRawKey,
+{
+    pub fn new(input_map: HashMap<String, Arc<str>>, build_variant: BuildVariant) -> Self {
+        let mut inner = HashMap::with_capacity(Key::COUNT);
+        for key in Key::iter() {
+            let value = match build_variant {
+                BuildVariant::Beta => {
+                    let beta_key = format!("{}.beta", key.raw());
+                    input_map
+                        .get(&beta_key)
+                        .or_else(|| input_map.get(key.raw()))
+                }
+                BuildVariant::Production => input_map.get(key.raw()),
+            };
+            if let Some(v) = value {
+                inner.insert(key, v.clone());
+            }
+        }
+        Self { inner }
     }
 
-    pub fn get(&self, key: RemoteConfigKey) -> RemoteConfigValue {
-        self.raw_map
-            .get(key.raw())
+    pub fn get(&self, key: Key) -> RemoteConfigValue {
+        self.inner
+            .get(&key)
             .map(|s| RemoteConfigValue::Enabled(s.clone()))
             .unwrap_or(RemoteConfigValue::Disabled)
     }
 
-    pub fn is_enabled(&self, key: RemoteConfigKey) -> bool {
+    pub fn is_enabled(&self, key: Key) -> bool {
         match self.get(key) {
             RemoteConfigValue::Disabled => false,
             RemoteConfigValue::Enabled(_) => true,
@@ -101,5 +163,57 @@ impl RemoteConfigValue {
             RemoteConfigValue::Disabled => None,
             RemoteConfigValue::Enabled(value) => Some(value),
         }
+    }
+}
+
+#[cfg(test)]
+// `define_keys` produces some things that end up not used, silence that.
+#[expect(dead_code)]
+mod tests {
+    use super::*;
+
+    define_keys! {
+        #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, strum::EnumCount, strum::EnumIter)]
+        pub enum RemoteConfigKey {
+            TestKey => "testKey",
+        }
+    }
+
+    #[test]
+    fn beta_prefers_beta_key_then_base() {
+        let m = HashMap::from_iter([
+            ("testKey".to_string(), Arc::from("base")),
+            ("testKey.beta".to_string(), Arc::from("beta")),
+        ]);
+
+        let prod = RemoteConfig::new(m.clone(), BuildVariant::Production);
+        let beta = RemoteConfig::new(m, BuildVariant::Beta);
+
+        assert_eq!(prod.get(RemoteConfigKey::TestKey).as_option(), Some("base"));
+        assert_eq!(beta.get(RemoteConfigKey::TestKey).as_option(), Some("beta"));
+
+        // Either way, should show as enabled.
+        assert!(prod.is_enabled(RemoteConfigKey::TestKey));
+        assert!(beta.is_enabled(RemoteConfigKey::TestKey));
+    }
+
+    #[test]
+    fn beta_falls_back_to_base_when_beta_key_missing() {
+        let m = HashMap::from_iter([("testKey".to_string(), Arc::from("base"))]);
+
+        let beta = RemoteConfig::new(m, BuildVariant::Beta);
+        assert_eq!(beta.get(RemoteConfigKey::TestKey).as_option(), Some("base"));
+
+        assert!(beta.is_enabled(RemoteConfigKey::TestKey));
+    }
+
+    #[test]
+    fn production_ignores_beta_keys() {
+        let m = HashMap::from_iter([("testKey.beta".to_string(), Arc::from("beta"))]);
+
+        let prod = RemoteConfig::new(m, BuildVariant::Production);
+        assert_eq!(prod.get(RemoteConfigKey::TestKey).as_option(), None);
+
+        assert!(!prod.is_enabled(RemoteConfigKey::TestKey));
     }
 }

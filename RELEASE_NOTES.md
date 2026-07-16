@@ -1,5 +1,5 @@
-v0.81.2
+v0.86.14
 
-- Enable negotiating permessage-deflate support for chat websocket connections, if configured.
-
-- Net: remove Noise connection shadowing for staging Chat websocket connections.
+- TypeScript: Fix accidentally-lax typing for the non-deprecated overload of `Net.setRemoteConfig`.
+- Upgrade MSRV to 1.88
+- Backup validator: validate group member labels

@@ -15,6 +15,7 @@ use libsignal_net::chat::{
     ChatConnection, ConnectError as ChatConnectError, SendError as ChatSendError,
 };
 use libsignal_net::infra::errors::{LogSafeDisplay, RetryLater};
+use libsignal_net::infra::route::UnsuccessfulOutcome;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::{Duration, Instant};
 use tokio_stream::wrappers::ReceiverStream;
@@ -100,11 +101,11 @@ impl<'c> RegistrationConnection<'c> {
             connect_chat,
         } = self;
 
-        let sender = sender.lock().unwrap().clone();
+        let sender = sender.lock().expect("not poisoned").clone();
 
         let (response, request_sender) =
             send_request(request, &**connect_chat, Some(&sender)).await?;
-        *self.sender.lock().unwrap() = request_sender;
+        *self.sender.lock().expect("not poisoned") = request_sender;
 
         Ok(response)
     }
@@ -180,7 +181,8 @@ impl SendError for ErrorResponse {
 
 const CHAT_CONNECT_DELAY_PARAMS: libsignal_net::infra::route::ConnectionOutcomeParams =
     libsignal_net::infra::route::ConnectionOutcomeParams {
-        age_cutoff: Duration::from_secs(60),
+        short_term_age_cutoff: Duration::from_secs(60),
+        long_term_age_cutoff: Duration::from_secs(60),
         cooldown_growth_factor: 1.5,
         count_growth_factor: 10.0,
         max_count: 5,
@@ -221,8 +223,11 @@ async fn spawn_connected_chat(
                         let since_last_failure = last_failure_at
                             .replace(now)
                             .map_or(Duration::MAX, |previous_failure| now - previous_failure);
-                        let delay = CHAT_CONNECT_DELAY_PARAMS
-                            .compute_delay(since_last_failure, failure_count);
+                        let delay = CHAT_CONNECT_DELAY_PARAMS.compute_delay(
+                            UnsuccessfulOutcome::ShortTerm,
+                            since_last_failure,
+                            failure_count,
+                        );
                         tokio::time::sleep(delay).await;
                         failure_count += 1;
                         continue;

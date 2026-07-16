@@ -1,4 +1,4 @@
-name: Publish to NPM
+name: "Release - NPM"
 
 on:
   push:
@@ -27,11 +27,11 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-15]
+        os: [windows-latest-8-cores, macos-15-xlarge]
         include:
-        - os: macos-15
+        - os: macos-15-xlarge
           rust-cross-target: x86_64-apple-darwin
-        - os: windows-latest
+        - os: windows-latest-8-cores
           rust-cross-target: aarch64-pc-windows-msvc
         # Ubuntu binaries are built using Docker, below
 
@@ -56,7 +56,7 @@ jobs:
             core.setFailed("the action should either be launched on a tag or with a 'dry run' switch");
           }
 
-    - run: rustup toolchain install $(cat rust-toolchain) --profile minimal --target ${{ matrix.rust-cross-target }}
+    - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal --target "${{ matrix.rust-cross-target }}"
 
     # install nasm compiler for boring
     - name: (Windows) Install nasm
@@ -75,7 +75,7 @@ jobs:
     - name: Get Node version from .nvmrc
       id: get-nvm-version
       shell: bash
-      run: echo "node-version=$(cat .nvmrc)" >> $GITHUB_OUTPUT
+      run: echo "node-version=$(cat .nvmrc)" >> "$GITHUB_OUTPUT"
 
     - uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # v4.0.24
       with:
@@ -128,7 +128,7 @@ jobs:
   build-docker:
     name: Build (Ubuntu via Docker)
 
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-cores
 
     timeout-minutes: 45
 
@@ -164,7 +164,7 @@ jobs:
       with:
         submodules: recursive
 
-    - run: rustup toolchain install $(cat rust-toolchain) --profile minimal
+    - run: rustup toolchain install "$(cat rust-toolchain)" --profile minimal
 
     - run: sudo apt-get update && sudo apt-get install protobuf-compiler
 
@@ -175,8 +175,10 @@ jobs:
     name: Publish
 
     permissions:
+      # Required for OIDC
+      id-token: write
       # Needed for ncipollo/release-action.
-      contents: 'write'
+      contents: write
 
     runs-on: ubuntu-latest
 
@@ -208,6 +210,9 @@ jobs:
         path: debuginfo
         merge-multiple: true
 
+    - name: Update npm
+      run: npm install -g npm@latest
+
     - run: npm ci
       working-directory: node
 
@@ -227,8 +232,6 @@ jobs:
 
     - run: npm publish --tag '${{ inputs.npm_tag || 'latest' }}' --access public ${{ inputs.dry_run && '--dry-run' || ''}}
       working-directory: node
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     # This step is expected to fail if not run on a tag.
     - name: Upload debug info to release

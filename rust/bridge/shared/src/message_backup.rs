@@ -9,6 +9,7 @@ use libsignal_bridge_macros::*;
 use libsignal_bridge_types::message_backup::*;
 use libsignal_message_backup::backup::Purpose;
 use libsignal_message_backup::frame::LimitedReaderFactory;
+use libsignal_message_backup::json::exporter::FrameExportResult as JsonFrameExportResult;
 use libsignal_message_backup::{BackupReader, FoundUnknownField, ReadError, ReadResult};
 use libsignal_protocol::Aci;
 
@@ -117,6 +118,7 @@ async fn MessageBackupValidator_Validate(
 }
 
 bridge_handle_fns!(OnlineBackupValidator, clone = false);
+bridge_handle_fns!(BackupJsonExporter, clone = false, ffi = false, jni = false);
 
 #[bridge_fn]
 fn OnlineBackupValidator_New(
@@ -137,15 +139,11 @@ fn OnlineBackupValidator_AddFrame(
         .parse_and_add_frame(frame, |_| ())
         .map_err(ReadError::with_error_only)?;
 
-    for (path, value) in unknown_fields {
-        log::warn!(
-            "{}",
-            FoundUnknownField {
-                frame_index: 0,
-                path,
-                value,
-            }
-        );
+    for entry in unknown_fields
+        .into_iter()
+        .map(FoundUnknownField::in_frame(0))
+    {
+        log::warn!("{entry}");
     }
 
     Ok(())
@@ -154,4 +152,41 @@ fn OnlineBackupValidator_AddFrame(
 #[bridge_fn]
 fn OnlineBackupValidator_Finalize(backup: &mut OnlineBackupValidator) -> Result<(), ReadError> {
     backup.finalize().map_err(ReadError::with_error_only)
+}
+
+#[bridge_fn(ffi = false, jni = false)]
+fn BackupJsonExporter_New(
+    backup_info: &[u8],
+    should_validate: bool,
+) -> Result<BackupJsonExporter, ReadError> {
+    let (exporter, initial_chunk) =
+        libsignal_message_backup::json::exporter::JsonExporter::new(backup_info, should_validate)
+            .map_err(ReadError::with_error_only)?;
+
+    Ok(BackupJsonExporter::new(exporter, initial_chunk))
+}
+
+#[bridge_fn(ffi = false, jni = false)]
+fn BackupJsonExporter_GetInitialChunk(exporter: &BackupJsonExporter) -> String {
+    exporter.initial_chunk().clone()
+}
+
+#[bridge_fn(ffi = false, jni = false)]
+fn BackupJsonExporter_ExportFrames(
+    exporter: &mut BackupJsonExporter,
+    frames: &[u8],
+) -> Result<Box<[JsonFrameExportResult]>, ReadError> {
+    exporter
+        .inner_mut()
+        .export_frames(frames)
+        .map(|results| results.into_boxed_slice())
+        .map_err(ReadError::with_error_only)
+}
+
+#[bridge_fn(ffi = false, jni = false)]
+fn BackupJsonExporter_Finish(exporter: &mut BackupJsonExporter) -> Result<(), ReadError> {
+    exporter
+        .inner_mut()
+        .finish()
+        .map_err(ReadError::with_error_only)
 }

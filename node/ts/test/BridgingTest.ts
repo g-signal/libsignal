@@ -5,9 +5,9 @@
 
 import * as uuid from 'uuid';
 import { assert, use } from 'chai';
-import * as chaiAsPromised from 'chai-as-promised';
-import * as Native from '../../Native';
-import { BridgedStringMap } from '../internal';
+import chaiAsPromised from 'chai-as-promised';
+import * as Native from '../Native.js';
+import { BridgedStringMap } from '../internal.js';
 
 use(chaiAsPromised);
 
@@ -200,6 +200,12 @@ describe('bridge_fn', () => {
 
     const absent = Native.TESTING_ConvertOptionalUuid(false);
     assert.isNull(absent);
+  });
+
+  it('can return pairs', () => {
+    const [num, str] = Native.TESTING_ReturnPair();
+    assert.equal(num, 1);
+    assert.equal(str, 'libsignal');
   });
 });
 

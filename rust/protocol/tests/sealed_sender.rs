@@ -106,6 +106,16 @@ fn test_sender_cert() -> Result<(), SignalProtocolError> {
     assert!(sender_cert.validate(&trust_root.public_key, expires)?);
     assert!(!sender_cert.validate(&trust_root.public_key, expires.add_millis(1))?); // expired
 
+    // Next, check that flipping any bit in the serialized form of the certificate leads to a parse
+    // or validation failure. Because of the use of OsRng, sender_cert isn't completely the same
+    // each time: the root key -> server cert signature and the server cert -> sender cert signature
+    // are both going to vary run to run. Flipping a bit will usually just result in either invalid
+    // protobuf or valid protobuf with non-matching signatures, but *occasionally* it will
+    // *rebracket* the protobuf such that the tail end of a signature gets treated as additional
+    // fields in the message one level up. This can result in additional unusual failures, which we
+    // explicitly permit below...but the main thing is that we should never get a *pass* from a
+    // single bit flip.
+
     let mut sender_cert_data = sender_cert.serialized()?.to_vec();
     let sender_cert_bits = sender_cert_data.len() * 8;
 
@@ -115,9 +125,14 @@ fn test_sender_cert() -> Result<(), SignalProtocolError> {
         sender_cert_data[b / 8] ^= 1u8 << (b % 8); // flip the bit back
 
         match cert {
-            Ok(cert) => {
-                assert!(!cert.validate(&trust_root.public_key, expires)?);
-            }
+            Ok(cert) => match cert.validate(&trust_root.public_key, expires) {
+                Ok(true) => panic!("modified cert should not have validated"),
+                Ok(false) => {}
+                Err(SignalProtocolError::UnknownSealedSenderServerCertificateId(_)) => {}
+                Err(unexpected_err) => {
+                    panic!("unexpected error during validation {unexpected_err:?}")
+                }
+            },
             Err(e) => match e {
                 SignalProtocolError::InvalidProtobufEncoding
                 | SignalProtocolError::BadKeyLength(_, _)
@@ -163,7 +178,6 @@ fn test_sealed_sender() -> Result<(), SignalProtocolError> {
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -210,7 +224,6 @@ fn test_sealed_sender() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -244,7 +257,6 @@ fn test_sealed_sender() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await;
 
@@ -285,7 +297,6 @@ fn test_sealed_sender() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await;
 
@@ -338,7 +349,6 @@ fn test_sender_key_in_sealed_sender() -> Result<(), SignalProtocolError> {
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -452,7 +462,6 @@ fn test_sealed_sender_multi_recipient() -> Result<(), SignalProtocolError> {
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -523,7 +532,6 @@ fn test_sealed_sender_multi_recipient() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -590,7 +598,6 @@ fn test_sealed_sender_multi_recipient() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await;
 
@@ -653,7 +660,6 @@ fn test_sealed_sender_multi_recipient() -> Result<(), SignalProtocolError> {
             &mut bob_store.pre_key_store,
             &bob_store.signed_pre_key_store,
             &mut bob_store.kyber_pre_key_store,
-            UsePQRatchet::Yes,
         )
         .await;
 
@@ -703,7 +709,6 @@ fn test_sealed_sender_multi_recipient_encrypt_with_archived_session()
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -810,7 +815,6 @@ fn test_sealed_sender_multi_recipient_encrypt_with_bad_registration_id()
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -909,7 +913,6 @@ fn test_decryption_error_in_sealed_sender() -> Result<(), SignalProtocolError> {
             &alice_pre_key_bundle,
             SystemTime::now(),
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -934,7 +937,6 @@ fn test_decryption_error_in_sealed_sender() -> Result<(), SignalProtocolError> {
             &alice_store.signed_pre_key_store,
             &mut alice_store.kyber_pre_key_store,
             &mut rng,
-            UsePQRatchet::Yes,
         )
         .await?;
 
@@ -1056,7 +1058,6 @@ fn test_sealed_sender_multi_recipient_redundant_empty_devices() -> Result<(), Si
             &bob_pre_key_bundle,
             SystemTime::now(),
             &mut csprng,
-            UsePQRatchet::Yes,
         )
         .await?;
 

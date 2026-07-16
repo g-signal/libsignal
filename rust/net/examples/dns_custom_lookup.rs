@@ -12,14 +12,14 @@ use libsignal_net::infra::certs::RootCertificates;
 use libsignal_net::infra::dns::custom_resolver::CustomDnsResolver;
 use libsignal_net::infra::dns::dns_lookup::{DnsLookup, DnsLookupRequest};
 use libsignal_net::infra::host::Host;
-use libsignal_net_infra::Alpn;
 use libsignal_net_infra::dns::dns_transport_doh::DohTransportConnectorFactory;
 use libsignal_net_infra::dns::dns_transport_udp::UdpTransportConnectorFactory;
 use libsignal_net_infra::route::{
-    HttpRouteFragment, HttpsTlsRoute, TcpRoute, TlsRoute, TlsRouteFragment, UdpRoute,
+    HttpRouteFragment, HttpVersion, HttpsTlsRoute, TcpRoute, TlsRoute, TlsRouteFragment, UdpRoute,
 };
 use libsignal_net_infra::timeouts::DNS_LATER_RESPONSE_GRACE_PERIOD;
 use libsignal_net_infra::utils::no_network_change_events;
+use libsignal_net_infra::{Alpn, OverrideNagleAlgorithm};
 use nonzero_ext::nonzero;
 use tokio::time::Instant;
 
@@ -43,9 +43,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    let _ = env_logger::builder()
+    env_logger::Builder::new()
         .filter_level(log::LevelFilter::Debug)
-        .try_init();
+        .parse_default_env()
+        .init();
 
     let args = Args::parse();
     const HOST_IP: IpAddr = ip_addr!("1.1.1.1");
@@ -69,6 +70,7 @@ async fn main() {
                 fragment: HttpRouteFragment {
                     host_header: host.clone(),
                     path_prefix: "".into(),
+                    http_version: Some(HttpVersion::Http2),
                     front_name: None,
                 },
                 inner: TlsRoute {
@@ -81,6 +83,7 @@ async fn main() {
                     inner: TcpRoute {
                         address: HOST_IP,
                         port: nonzero!(443u16),
+                        override_nagle_algorithm: OverrideNagleAlgorithm::UseSystemDefault,
                     },
                 },
             };

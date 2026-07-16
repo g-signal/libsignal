@@ -9,12 +9,12 @@
 //! on the same set of open connections, as opposed to having to connect for
 //! each individual operation, as implied by `SvrBClient` trait.
 
-use futures_util::TryFutureExt as _;
 use futures_util::future::join_all;
 use libsignal_net_infra::ws::NextOrClose;
 use libsignal_net_infra::ws::attested::AttestedConnectionError;
 pub(crate) use libsignal_svrb::{Backup4, Secret};
 use libsignal_svrb::{Query4, Remove4, Restore1};
+use nonzero_ext::nonzero;
 use rand::TryRngCore;
 use rand::rngs::OsRng;
 
@@ -29,7 +29,7 @@ pub fn do_prepare<Env: PpssSetup>(password: &[u8]) -> Backup4 {
     Backup4::new(
         server_ids.as_ref(),
         password,
-        std::num::NonZero::new(255u32).unwrap(), // tries
+        nonzero!(255u32), // tries
         &mut rng,
     )
 }
@@ -38,6 +38,7 @@ pub async fn do_backup<Env: PpssSetup>(
     connect_results: Env::ConnectionResults,
     backup: &Backup4,
 ) -> Result<(), Error> {
+    assert_eq!(Env::N, backup.requests.len());
     let ConnectionContext {
         mut connections,
         errors,
@@ -158,9 +159,10 @@ async fn run_attested_interaction(
     connection: &mut LabeledConnection,
     request: impl AsRef<[u8]>,
 ) -> Result<(NextOrClose<Vec<u8>>, &ConnectionLabel), AttestedConnectionError> {
-    libsignal_net_infra::ws::attested::run_attested_interaction(&mut connection.0, request)
-        .map_ok(|n| (n, &connection.1))
-        .await
+    let (connection, label) = connection;
+    connection.send_bytes(request.as_ref()).await?;
+    let received = connection.receive_bytes().await?;
+    Ok((received, label))
 }
 
 struct ConnectionContext {

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-use libsignal_core::Aci;
+use libsignal_core::{Aci, Pni, ServiceId};
 
 pub struct Redact<T>(pub T);
 impl std::fmt::Display for Redact<&'_ uuid::Uuid> {
@@ -28,6 +28,21 @@ impl std::fmt::Display for Redact<&'_ Aci> {
     }
 }
 
+impl std::fmt::Display for Redact<&'_ Pni> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "PNI:{}", Redact(&uuid::Uuid::from(*self.0)))
+    }
+}
+
+impl std::fmt::Display for Redact<&'_ ServiceId> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            ServiceId::Aci(specific_service_id) => Redact(specific_service_id).fmt(f),
+            ServiceId::Pni(specific_service_id) => Redact(specific_service_id).fmt(f),
+        }
+    }
+}
+
 /// Redacts all but the last 3 characters of its contents, which are assumed to be hex.
 ///
 /// We keep the last characters rather than the first characters for consistency with the redaction
@@ -45,6 +60,12 @@ impl std::fmt::Display for RedactHex<'_> {
             index_of_last_three_digits,
             &self.0[index_of_last_three_digits..],
         )
+    }
+}
+/// Implemented for use in DebugStruct etc, but still uses the Display impl.
+impl std::fmt::Debug for RedactHex<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
     }
 }
 
@@ -72,6 +93,16 @@ impl std::fmt::Display for RedactBase64<'_> {
             index_of_last_two_non_padding_characters,
             &self.0[index_of_last_two_non_padding_characters..],
         )
+    }
+}
+
+pub struct DebugAsStrOrBytes<'b>(pub &'b [u8]);
+impl std::fmt::Debug for DebugAsStrOrBytes<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match std::str::from_utf8(self.0) {
+            Ok(s) => s.fmt(f),
+            Err(_) => hex::encode(self.0).fmt(f),
+        }
     }
 }
 

@@ -3,9 +3,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import * as Native from '../Native';
-import * as stream from 'stream';
-import { IncrementalMacVerificationFailed, LibSignalErrorBase } from './Errors';
+import * as stream from 'node:stream';
+import { Buffer } from 'node:buffer';
+
+import * as Native from './Native.js';
+import {
+  IncrementalMacVerificationFailed,
+  LibSignalErrorBase,
+} from './Errors.js';
 
 type CallbackType = (error?: Error | null) => void;
 
@@ -41,7 +46,7 @@ class DigestingWritable extends stream.Writable {
   }
 
   _write(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chunk: any,
     encoding: BufferEncoding,
     callback: CallbackType
@@ -119,11 +124,18 @@ class ValidatingWritable extends stream.Writable {
     digest: Uint8Array
   ) {
     super();
-    this._nativeHandle = Native.ValidatingMac_Initialize(
+    const handle = Native.ValidatingMac_Initialize(
       key,
       chunkSizeInBytes(sizeChoice),
       digest
     );
+    if (!handle) {
+      // Not sure why eslint isn't treating IncrementalMacVerificationFailed as an Error;
+      // standalone examples are not reproducing.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw makeVerificationError('Invalid configuration data');
+    }
+    this._nativeHandle = handle;
   }
 
   validatedSize(): number {
@@ -131,7 +143,7 @@ class ValidatingWritable extends stream.Writable {
   }
 
   _write(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/explicit-module-boundary-types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     chunk: any,
     encoding: BufferEncoding,
     callback: CallbackType

@@ -45,13 +45,15 @@ These should usually be prioritized in that order, but adjust the trade-off as n
 
 - **Prefer `expect()` to `unwrap()`.** As noted, we don't have a no-panics policy, but `expect()` forces you to write down why you believe something should *never* happen except for programmer errors. In particular, untrusted input that fails to validate should *not* panic.
 
-    (Yes, there's a Clippy lint for this, but we also have a lot of code that predates this guideline.)
+    As an exception, it's okay to use `unwrap()` in tests, though `expect()` is still preferred if it's for the thing you're actively testing.
 
 - You don't have to write doc comments on everything, but **if you do write a comment, make it a doc comment**, because they show up more nicely in IDEs.
 
-- We build with a pinned nightly toolchain, but **we also support stable**. The specific minimum supported version of stable is checked in CI (specifically, at the top of [build_and_test.yml](.github/workflows/build_and_test.yml)). We permit ourselves to bump this as needed, but try not to do so capriciously because we know external people might be in non-rustup scenarios where getting a new stable is tricky. If you need to bump the minimum supported version of stable, make sure the next release has a "breaking" version number.
+- We build with a pinned nightly toolchain, but **we also support stable**. The specific minimum supported version of stable is listed in our top-level Cargo.toml and checked in CI. We permit ourselves to bump this as needed, but try not to do so capriciously because we know external people might be in non-rustup scenarios where getting a new stable is tricky; in practice we often end up following tokio's "six months back" policy. If you need to bump the minimum supported version of stable, make sure the next release has a "breaking" version number.
 
-- **We do not have a changelog file**; we rely on [GitHub displaying all our releases](https://github.com/signalapp/libsignal/releases).
+    - Crate-level Cargo.tomls don't usually inherit the workspace `rust-version`, because many crates are relatively stable and may continue working for external folks using earlier versions of Rust even though we no longer test for them; picking up the top-level MSRV update would therefore be unnecessarily breaking. Instead, they have a `rust-version` that indicates a known minimum at some point in the past; it may be too low, but it will never be overly high. The exceptions are the `bridge` crates, which are not intended to be used for anything but the app language libraries.
+
+- **We do not have a changelog file**; we rely on [GitHub displaying all our releases](https://github.com/signalapp/libsignal/releases). Unreleased changes are collected in [RELEASE_NOTES.md][], which is reset after each release.
 
 - **Avoid `cargo add`**, or fix up the Cargo.toml afterwards. Some of our dependency lists are organized and `cargo add` doesn't respect that.
 
@@ -62,6 +64,10 @@ These should usually be prioritized in that order, but adjust the trade-off as n
         RUSTFLAGS="--cfg aes_armv8 ${RUSTFLAGS:-}"
 
     These are automatically detected on x86_64, but will require an opt-in for aarch64 until we can update to `aes 0.9` or newer (not out yet at the time of this writing). All our app library build scripts set this themselves, but doing a manual `cargo build --release` will not.
+
+- Our bridging logic uses code generation tools for the app-language interface files (C header for Swift, wrapper APIs for Java/Kotlin and TypeScript). These tools, or the macros used with them, depend on how types are written in `#[bridge_fn]` and other bridged APIs. Therefore, **use qualified names for non-std, non-libsignal types** in bridged signatures, so that they can be matched specifically and without ambiguity.
+
+    (There is one exception: `uuid::Uuid` has been `Uuid` for a long time, and is sufficiently unique to justify leaving it that way.)
 
 
 ## Async
@@ -79,7 +85,7 @@ These should usually be prioritized in that order, but adjust the trade-off as n
 
 # Java
 
-- Many of our APIs are shared between Android and Server, and we also run the client tests on desktop machines, so **stick to Java 8** unless you've verified that something newer is available on Android (back to our earliest supported version, API level 21, at the time of this writing), and don't use Android-specific APIs unless you're actually in Android-specific code. (This *should* be checked in CI but things have slipped through before, and it'll save you time to know whether you're allowed to use something.)
+- Many of our APIs are shared between Android and Server, and we also run the client tests on desktop machines, so **stick to Java 8** unless you've verified that something newer is available on Android (back to our earliest supported version, API level 23, at the time of this update), and don't use Android-specific APIs unless you're actually in Android-specific code. (This *should* be checked in CI but things have slipped through before, and it'll save you time to know whether you're allowed to use something.)
 
 - **Put server-specific APIs in the server/ folder if they're not needed to test client features**, so they don't add code size for Android.
 

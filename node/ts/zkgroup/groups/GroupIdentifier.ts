@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-import ByteArray from '../internal/ByteArray';
+import ByteArray from '../internal/ByteArray.js';
+import { Buffer } from 'node:buffer';
 
 export default class GroupIdentifier extends ByteArray {
   private readonly __type?: never;

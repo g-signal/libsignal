@@ -8,6 +8,7 @@
 package org.signal.libsignal.internal
 
 import org.signal.libsignal.net.internal.BridgeChatListener
+import org.signal.libsignal.net.internal.BridgeProvisioningListener
 import org.signal.libsignal.net.internal.ConnectChatBridge
 import org.signal.libsignal.protocol.SignedPublicPreKey
 import org.signal.libsignal.protocol.groups.state.SenderKeyStore
@@ -30,6 +31,7 @@ import java.nio.file.Path
 import java.util.Map
 import java.util.UUID
 import java.util.concurrent.Future
+
 
 public typealias ObjectHandle = Long
 
@@ -339,7 +341,7 @@ internal object Native {
   @JvmStatic
   public external fun ConnectionManager_clear_proxy(connectionManager: ObjectHandle): Unit
   @JvmStatic
-  public external fun ConnectionManager_new(environment: Int, userAgent: String, remoteConfig: ObjectHandle): ObjectHandle
+  public external fun ConnectionManager_new(environment: Int, userAgent: String, remoteConfig: ObjectHandle, buildVariant: Int): ObjectHandle
   @JvmStatic
   public external fun ConnectionManager_on_network_change(connectionManager: ObjectHandle): Unit
   @JvmStatic
@@ -349,7 +351,7 @@ internal object Native {
   @JvmStatic
   public external fun ConnectionManager_set_proxy(connectionManager: ObjectHandle, proxy: ObjectHandle): Unit
   @JvmStatic
-  public external fun ConnectionManager_set_remote_config(connectionManager: ObjectHandle, remoteConfig: ObjectHandle): Unit
+  public external fun ConnectionManager_set_remote_config(connectionManager: ObjectHandle, remoteConfig: ObjectHandle, buildVariant: Int): Unit
 
   @JvmStatic
   public external fun ConnectionProxyConfig_Destroy(handle: ObjectHandle): Unit
@@ -582,8 +584,8 @@ internal object Native {
   @JvmStatic @Throws(Exception::class)
   public external fun HttpRequest_new(method: String, path: String, bodyAsSlice: ByteArray?): ObjectHandle
 
-  @JvmStatic
-  public external fun IdentityKeyPair_Deserialize(data: ByteArray): LongArray
+  @JvmStatic @Throws(Exception::class)
+  public external fun IdentityKeyPair_Deserialize(input: ByteArray): Pair<ObjectHandle, ObjectHandle>
   @JvmStatic
   public external fun IdentityKeyPair_Serialize(publicKey: ObjectHandle, privateKey: ObjectHandle): ByteArray
   @JvmStatic @Throws(Exception::class)
@@ -853,6 +855,15 @@ internal object Native {
   public external fun ProtocolAddress_Name(obj: ObjectHandle): String
   @JvmStatic @Throws(Exception::class)
   public external fun ProtocolAddress_New(name: String, deviceId: Int): ObjectHandle
+
+  @JvmStatic
+  public external fun ProvisioningChatConnection_Destroy(handle: ObjectHandle): Unit
+  @JvmStatic
+  public external fun ProvisioningChatConnection_connect(asyncRuntime: ObjectHandle, connectionManager: ObjectHandle): CompletableFuture<ObjectHandle>
+  @JvmStatic
+  public external fun ProvisioningChatConnection_disconnect(asyncRuntime: ObjectHandle, chat: ObjectHandle): CompletableFuture<Void?>
+  @JvmStatic
+  public external fun ProvisioningChatConnection_init_listener(chat: ObjectHandle, listener: BridgeProvisioningListener): Unit
 
   @JvmStatic @Throws(Exception::class)
   public external fun ReceiptCredentialPresentation_CheckValidContents(buffer: ByteArray): Unit
@@ -1157,10 +1168,10 @@ internal object Native {
   public external fun ServiceId_ServiceIdString(value: ByteArray): String
 
   @JvmStatic @Throws(Exception::class)
-  public external fun SessionBuilder_ProcessPreKeyBundle(bundle: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, now: Long, usePqRatchet: Boolean): Unit
+  public external fun SessionBuilder_ProcessPreKeyBundle(bundle: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, now: Long): Unit
 
   @JvmStatic @Throws(Exception::class)
-  public external fun SessionCipher_DecryptPreKeySignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, prekeyStore: PreKeyStore, signedPrekeyStore: SignedPreKeyStore, kyberPrekeyStore: KyberPreKeyStore, usePqRatchet: Boolean): ByteArray
+  public external fun SessionCipher_DecryptPreKeySignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore, prekeyStore: PreKeyStore, signedPrekeyStore: SignedPreKeyStore, kyberPrekeyStore: KyberPreKeyStore): ByteArray
   @JvmStatic @Throws(Exception::class)
   public external fun SessionCipher_DecryptSignalMessage(message: ObjectHandle, protocolAddress: ObjectHandle, sessionStore: SessionStore, identityKeyStore: IdentityKeyStore): ByteArray
   @JvmStatic @Throws(Exception::class)
@@ -1268,7 +1279,11 @@ internal object Native {
   @JvmStatic
   public external fun UnauthenticatedChatConnection_look_up_username_hash(asyncRuntime: ObjectHandle, chat: ObjectHandle, hash: ByteArray): CompletableFuture<UUID?>
   @JvmStatic
+  public external fun UnauthenticatedChatConnection_look_up_username_link(asyncRuntime: ObjectHandle, chat: ObjectHandle, uuid: UUID, entropy: ByteArray): CompletableFuture<Pair<String, ByteArray>?>
+  @JvmStatic
   public external fun UnauthenticatedChatConnection_send(asyncRuntime: ObjectHandle, chat: ObjectHandle, httpRequest: ObjectHandle, timeoutMillis: Int): CompletableFuture<Object>
+  @JvmStatic
+  public external fun UnauthenticatedChatConnection_send_multi_recipient_message(asyncRuntime: ObjectHandle, chat: ObjectHandle, payload: ByteArray, timestamp: Long, auth: ByteArray?, onlineOnly: Boolean, isUrgent: Boolean): CompletableFuture<Array<Object>>
 
   @JvmStatic @Throws(Exception::class)
   public external fun UnidentifiedSenderMessageContent_Deserialize(data: ByteArray): ObjectHandle

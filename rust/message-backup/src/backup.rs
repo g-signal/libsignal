@@ -168,6 +168,13 @@ pub enum Purpose {
         serialize = "backup"
     )]
     RemoteBackup = 1,
+    /// For human-readable-ish exports that should exclude disappearing content.
+    #[strum(
+        serialize = "takeout_export",
+        serialize = "takeout-export",
+        serialize = "takeout"
+    )]
+    TakeoutExport = 2,
 }
 
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
@@ -183,6 +190,8 @@ pub enum CompletionError {
     MissingSelfRecipient,
     /// {0:?} and {1:?} have the same phone number
     DuplicateContactE164(RecipientId, RecipientId),
+    /// {0:?} and {1:?} have the same username
+    DuplicateContactUsername(RecipientId, RecipientId),
     /// {0:?} and {1:?} have the same ACI
     DuplicateContactAci(RecipientId, RecipientId),
     /// {0:?} and {1:?} have the same PNI
@@ -314,16 +323,21 @@ impl<M: Method + ReferencedTypes> CompletedBackup<M> {
                     * std::mem::size_of::<(Aci, RecipientId)>()
                 + HIGH_BUT_REASONABLE_NUMBER_OF_CONTACTS
                     * std::mem::size_of::<(Pni, RecipientId)>()
+                + HIGH_BUT_REASONABLE_NUMBER_OF_CONTACTS
+                    * std::mem::size_of::<(&str, RecipientId)>()
                 + HIGH_BUT_REASONABLE_NUMBER_OF_GROUPS
                     * std::mem::size_of::<(zkgroup::GroupMasterKeyBytes, RecipientId)>()
                 + HIGH_BUT_REASONABLE_NUMBER_OF_DISTRIBUTION_LISTS
                     * std::mem::size_of::<(uuid::Uuid, RecipientId)>()
                 + HIGH_BUT_REASONABLE_NUMBER_OF_CALL_LINKS
                     * std::mem::size_of::<(call::CallLinkRootKey, RecipientId)>()
-                < 250_000,
+                < 350_000,
         );
 
         let mut e164s = IntMap::<u64, RecipientId>::with_capacity(
+            recipients.len().min(HIGH_BUT_REASONABLE_NUMBER_OF_CONTACTS),
+        );
+        let mut usernames = HashMap::<&str, RecipientId>::with_capacity(
             recipients.len().min(HIGH_BUT_REASONABLE_NUMBER_OF_CONTACTS),
         );
         let mut acis = AssumedRandomInputHasher::map_with_capacity::<Aci, RecipientId>(
@@ -358,7 +372,19 @@ impl<M: Method + ReferencedTypes> CompletedBackup<M> {
 
         for (id, recipient) in recipients.iter() {
             match recipient.as_ref() {
-                MinimalRecipientData::Contact { e164, aci, pni } => {
+                MinimalRecipientData::Contact {
+                    e164,
+                    aci,
+                    pni,
+                    username,
+                } => {
+                    insert_or_error(
+                        &mut usernames,
+                        username.as_deref(),
+                        id,
+                        CompletionError::DuplicateContactUsername,
+                    )?;
+
                     // We can't use insert_or_throw_error for `e164s` because it's an IntMap.
                     // Here's an inlined copy:
                     if let Some(e164) = *e164 {
@@ -424,10 +450,28 @@ impl<M: Method + ReferencedTypes> CompletedBackup<M> {
     }
 }
 
+#[derive(Debug, displaydoc::Display, PartialEq, Eq, Clone, Copy)]
+pub enum HasUnknownFields {
+    /// no unknown fields
+    No,
+    /// unknown fields
+    Yes,
+}
+
+impl HasUnknownFields {
+    pub fn check(special_fields: &protobuf::SpecialFields) -> Self {
+        if special_fields.unknown_fields().iter().next().is_some() {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
 #[derive(Debug, displaydoc::Display, thiserror::Error)]
 pub enum ValidationError {
-    /// Frame.item is a oneof but has no value
-    EmptyFrame,
+    /// Frame.item is a oneof but has no value with {0}
+    EmptyFrame(HasUnknownFields),
     /// BackupInfo error: {0}
     BackupInfoError(#[from] MetadataError),
     /// multiple AccountData frames found
@@ -626,7 +670,9 @@ impl<M: Method + ReferencedTypes> PartialBackup<M> {
     }
 
     pub fn add_frame(&mut self, frame: proto::Frame) -> Result<(), ValidationError> {
-        self.add_frame_item(frame.item.ok_or(ValidationError::EmptyFrame)?)
+        self.add_frame_item(frame.item.ok_or_else(|| {
+            ValidationError::EmptyFrame(HasUnknownFields::check(&frame.special_fields))
+        })?)
     }
 
     fn add_frame_item(&mut self, item: FrameItem) -> Result<(), ValidationError> {
@@ -862,27 +908,72 @@ impl<M: Method + ReferencedTypes> ReportUnusualTimestamp for PartialBackup<M> {
 
 #[cfg(feature = "json")]
 #[derive(Debug, thiserror::Error, displaydoc::Display)]
-pub enum ConvertJsonError {
-    /// input array was empty
-    EmptyArray,
-    /// failed to parse JSON as proto: {0}
-    ProtoJsonParse(#[from] protobuf_json_mapping::ParseError),
+pub enum ConvertToJsonError {
     /// failed to print proto as JSON: {0}
     ProtoJsonPrint(#[from] protobuf_json_mapping::PrintError),
     /// JSON error: {0}
     Json(#[from] serde_json::Error),
-    /// failed to encode/decode binary protobuf: {0}
+    /// failed to decode binary protobuf: {0}
     ProtoEncode(#[from] protobuf::Error),
     /// input/output error: {0}
     Io(#[from] std::io::Error),
 }
 
 #[cfg(feature = "json")]
-pub fn convert_from_json(json: Vec<serde_json::Value>) -> Result<Box<[u8]>, ConvertJsonError> {
+#[derive(Debug, thiserror::Error, displaydoc::Display)]
+pub enum ConvertFromJsonError {
+    /// input array was empty
+    EmptyArray,
+    /// failed to parse JSON as proto: {0}
+    ProtoJsonParse(#[from] protobuf_json_mapping::ParseError),
+    /// failed to encode binary protobuf: {0}
+    ProtoEncode(#[from] protobuf::Error),
+}
+
+#[cfg(feature = "json")]
+fn binary_proto_to_json<M: protobuf::MessageFull>(
+    binary: &[u8],
+) -> Result<serde_json::Value, ConvertToJsonError> {
+    let proto = M::parse_from_bytes(binary)?;
+    let json_proto = protobuf_json_mapping::print_to_string(&proto)?;
+    Ok(serde_json::from_str(&json_proto)?)
+}
+
+#[cfg(feature = "json")]
+pub fn backup_info_to_json_value(binary: &[u8]) -> Result<serde_json::Value, ConvertToJsonError> {
+    binary_proto_to_json::<proto::BackupInfo>(binary)
+}
+
+#[cfg(feature = "json")]
+pub fn frame_to_json_value(binary: &[u8]) -> Result<serde_json::Value, ConvertToJsonError> {
+    binary_proto_to_json::<proto::Frame>(binary)
+}
+
+#[cfg(feature = "json")]
+pub fn frames_to_json_values(
+    length_delimited_frames: &[u8],
+) -> Result<Vec<serde_json::Value>, ConvertToJsonError> {
+    use futures::io::Cursor;
+
+    let mut reader = crate::VarintDelimitedReader::new(Cursor::new(length_delimited_frames));
+
+    futures::executor::block_on(async {
+        let mut values = Vec::new();
+        while let Some(frame) = reader.read_next().await? {
+            values.push(frame_to_json_value(&frame)?);
+        }
+        Ok(values)
+    })
+}
+
+#[cfg(feature = "json")]
+pub fn convert_from_json(json: Vec<serde_json::Value>) -> Result<Box<[u8]>, ConvertFromJsonError> {
     let mut it = json.into_iter();
 
     let backup_info = protobuf_json_mapping::parse_from_str::<proto::BackupInfo>(
-        &it.next().ok_or(ConvertJsonError::EmptyArray)?.to_string(),
+        &it.next()
+            .ok_or(ConvertFromJsonError::EmptyArray)?
+            .to_string(),
     )?;
 
     let mut serialized = Vec::new();
@@ -900,22 +991,16 @@ pub fn convert_from_json(json: Vec<serde_json::Value>) -> Result<Box<[u8]>, Conv
 #[cfg(feature = "json")]
 pub async fn convert_to_json(
     length_delimited_binproto: impl futures::AsyncRead + Unpin,
-) -> Result<Vec<serde_json::Value>, ConvertJsonError> {
-    fn binary_proto_to_json<M: protobuf::MessageFull>(
-        binary: &[u8],
-    ) -> Result<serde_json::Value, ConvertJsonError> {
-        let proto = M::parse_from_bytes(binary)?;
-        let json_proto = protobuf_json_mapping::print_to_string(&proto)?;
-        Ok(serde_json::from_str(&json_proto)?)
-    }
-
+) -> Result<Vec<serde_json::Value>, ConvertToJsonError> {
     let mut reader = crate::VarintDelimitedReader::new(length_delimited_binproto);
 
     let mut array = Vec::new();
-    let backup_info = reader
-        .read_next()
-        .await?
-        .ok_or(ConvertJsonError::EmptyArray)?;
+    let backup_info = reader.read_next().await?.ok_or_else(|| {
+        ConvertToJsonError::Io(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "empty array",
+        ))
+    })?;
     array.push(binary_proto_to_json::<proto::BackupInfo>(&backup_info)?);
 
     while let Some(frame) = reader.read_next().await? {
@@ -1232,6 +1317,9 @@ mod test {
             }),
             (CompletionError::DuplicateContactE164, |x| {
                 x.e164 = Some(proto::Contact::TEST_E164.into());
+            }),
+            (CompletionError::DuplicateContactUsername, |x| {
+                x.username = Some("duplicate.1234".to_owned());
             }),
         ]
     )]

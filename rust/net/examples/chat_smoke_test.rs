@@ -10,9 +10,12 @@ use std::process::ExitCode;
 use clap::{Parser, ValueEnum};
 use futures_util::{FutureExt, StreamExt};
 use libsignal_net::chat::ConnectError;
+use libsignal_net::connect_state::infer_proxy_mode_for_config;
 use libsignal_net_infra::EnableDomainFronting;
 use libsignal_net_infra::host::Host;
-use libsignal_net_infra::route::{ConnectionProxyConfig, SIGNAL_TLS_PROXY_SCHEME};
+use libsignal_net_infra::route::{
+    ConnectionProxyConfig, DirectOrProxyMode, SIGNAL_TLS_PROXY_SCHEME,
+};
 use strum::IntoEnumIterator as _;
 use url::Url;
 
@@ -25,6 +28,8 @@ struct Config {
     try_all_routes: bool,
     #[arg(long)]
     proxy_url: Option<String>,
+    #[arg(long)]
+    allow_proxy_fallback: Option<bool>,
     #[arg(long)]
     dry_run: bool,
 }
@@ -46,7 +51,7 @@ enum Environment {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    env_logger::builder()
+    env_logger::Builder::new()
         .filter_module(module_path!(), log::LevelFilter::Info)
         .parse_default_env()
         .init();
@@ -56,6 +61,7 @@ async fn main() -> ExitCode {
         limit_to_routes,
         try_all_routes,
         proxy_url,
+        allow_proxy_fallback,
         dry_run,
     } = Config::parse();
     let env = match env {
@@ -92,7 +98,7 @@ async fn main() -> ExitCode {
         config.hostnames()
     });
 
-    let proxy = proxy_url.map(|url| {
+    let proxy_mode = proxy_url.map_or(DirectOrProxyMode::DirectOnly, |url| {
         let url = Url::parse(&url)
             .inspect_err(|_| {
                 log::warn!("did you mean to prefix with {SIGNAL_TLS_PROXY_SCHEME}:// ?");
@@ -105,13 +111,18 @@ async fn main() -> ExitCode {
             let password = url.password()?;
             Some((url.username().to_owned(), password.to_owned()))
         })();
-        ConnectionProxyConfig::from_parts(
+        let config = ConnectionProxyConfig::from_parts(
             url.scheme(),
             url.host_str().expect("host was not provided"),
             url.port().and_then(NonZero::new),
             authority,
         )
-        .unwrap()
+        .unwrap();
+        match allow_proxy_fallback {
+            Some(true) => DirectOrProxyMode::ProxyThenDirect(config),
+            Some(false) => DirectOrProxyMode::ProxyOnly(config),
+            None => infer_proxy_mode_for_config(config),
+        }
     });
 
     let success = if try_all_routes {
@@ -124,7 +135,7 @@ async fn main() -> ExitCode {
                     &env,
                     HashSet::from([sni]),
                     EnableDomainFronting::AllDomains,
-                    proxy.clone(),
+                    proxy_mode.clone(),
                     dry_run,
                 )
                 .map(|result| match result {
@@ -147,7 +158,7 @@ async fn main() -> ExitCode {
             &env,
             snis.copied().collect(),
             domain_fronting,
-            proxy,
+            proxy_mode,
             dry_run,
         )
         .await
@@ -171,11 +182,11 @@ async fn test_connection(
     env: &libsignal_net::env::Env<'static>,
     snis: HashSet<&str>,
     domain_fronting: EnableDomainFronting,
-    proxy: Option<ConnectionProxyConfig>,
+    proxy_mode: DirectOrProxyMode,
     dry_run: bool,
 ) -> Result<(), ConnectError> {
     use libsignal_net::chat::test_support::simple_chat_connection;
-    let chat_connection = simple_chat_connection(env, domain_fronting, proxy, |route| {
+    let chat_connection = simple_chat_connection(env, domain_fronting, proxy_mode, |route| {
         match &route.inner.fragment.sni {
             Host::Domain(domain) => {
                 if !snis.contains(&domain[..]) {

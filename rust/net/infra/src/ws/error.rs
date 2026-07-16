@@ -3,9 +3,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-//! Errors that can be returned during websocket operations. The top-level
-//! [`Error`] type is a mirror of [`tungstenite::error::Error`] whose
-//! [`std::fmt::Display`] impl doesn't contain any user data.
+//! Errors that can be returned during websocket operations. Many types are mirrors of tungstenite
+//! errors whose [`std::fmt::Display`] impl doesn't contain any user data.
 
 use std::borrow::Borrow;
 
@@ -84,7 +83,7 @@ pub enum SpaceError {
 ///
 /// Provides a user-data-free [`std::fmt::Display`] implementation.
 #[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub struct ProtocolError(#[from] tungstenite::error::ProtocolError);
+pub struct ProtocolError(#[from] pub(crate) tungstenite::error::ProtocolError);
 
 impl std::fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -128,10 +127,6 @@ impl std::fmt::Display for ProtocolError {
             ProtocolError::ResetWithoutClosingHandshake => "ResetWithoutClosingHandshake",
             ProtocolError::InvalidOpcode(_) => "InvalidOpcode",
             ProtocolError::InvalidCloseSequence => "InvalidCloseSequence",
-            ProtocolError::InvalidExtensionsHeader(_) => "InvalidExtensionsHeader",
-            ProtocolError::CompressedContinueFrame => "CompressedContinueFrame",
-            ProtocolError::CompressedControlFrame => "CompressedControlFrame",
-            ProtocolError::CompressionFailure(_) => "CompressionFailure",
         };
         write!(f, "{str}")
     }

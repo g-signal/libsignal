@@ -2,7 +2,7 @@
 name = "libsignal-net-infra"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors.workspace = true
 license.workspace = true
 
@@ -56,13 +56,11 @@ tokio-socks = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-tungstenite = { workspace = true }
 tokio-util = { workspace = true }
+tower-service = { workspace = true, optional = true }
 tungstenite = { workspace = true }
 visibility = { workspace = true }
-warp = { workspace = true, features = ["tls"], optional = true }
+warp = { workspace = true, optional = true, features = ["server"] }
 zerocopy = { workspace = true, features = ["derive"] }
-
-[build-dependencies]
-prost-build = { workspace = true }
 
 [dev-dependencies]
 const-str = { workspace = true }
@@ -78,4 +76,4 @@ test-case = { workspace = true }
 test-log = { workspace = true }
 tls-parser = { workspace = true }
 tokio = { workspace = true, features = ["test-util", "io-std", "rt-multi-thread"] }
-warp = { workspace = true, features = ["tls"] }
+warp = { workspace = true, features = ["server"] }

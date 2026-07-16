@@ -38,7 +38,7 @@ use crate::credentials::{
 use crate::sho::ShoExt;
 use crate::{RANDOMNESS_LEN, VerificationFailure};
 
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 struct PresentationProofCommitments {
     C_x0: RistrettoPoint,
     C_x1: RistrettoPoint,
@@ -49,7 +49,7 @@ struct PresentationProofCommitments {
 /// Demonstrates to the _verifying server_ that the client holds a particular credential.
 ///
 /// Use [`PresentationProofVerifier`] to validate the proof.
-#[derive(Serialize, Deserialize, PartialDefault)]
+#[derive(Clone, Serialize, Deserialize, PartialDefault)]
 pub struct PresentationProof {
     commitments: PresentationProofCommitments,
     poksho_proof: Vec<u8>,
@@ -547,7 +547,7 @@ impl<'a> PresentationProofBuilder<'a> {
                 self.core.authenticated_message,
                 &sho.squeeze_and_ratchet_as_array::<RANDOMNESS_LEN>(),
             )
-            .unwrap();
+            .expect("valid proof");
 
         PresentationProof {
             commitments,
