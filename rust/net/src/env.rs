@@ -733,20 +733,16 @@ pub const STAGING: Env<'static> = Env {
     svr2: EnclaveEndpoint {
         domain_config: DOMAIN_CONFIG_SVR2_STAGING,
         ws_config: RECOMMENDED_WS_CONFIG,
-        params: ENDPOINT_PARAMS_SVR2_2026Q1_STAGING,
+        params: ENDPOINT_PARAMS_SVR2_2025Q3_STAGING,
     },
     svr_b: SvrBEnv {
         current: [
             Some(EnclaveEndpoint {
                 domain_config: DOMAIN_CONFIG_SVRB_STAGING,
                 ws_config: RECOMMENDED_WS_CONFIG,
-                params: ENDPOINT_PARAMS_SVRB_2026Q1_STAGING,
-            }),
-            Some(EnclaveEndpoint {
-                domain_config: DOMAIN_CONFIG_SVRB_STAGING,
-                ws_config: RECOMMENDED_WS_CONFIG,
                 params: ENDPOINT_PARAMS_SVRB_2025Q3_STAGING,
             }),
+            None,
             None,
         ],
         previous: [None, None, None],
