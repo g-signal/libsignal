@@ -43,10 +43,11 @@ publish_java: docker_image
 	else echo "<not set>"; fi)"
 	@echo "========================================="
 	$(DOCKER) run --rm --user $$(id -u):$$(id -g) \
+		-e ORG_GRADLE_PROJECT_sonatypeUsername \
+		-e ORG_GRADLE_PROJECT_sonatypePassword \
 		-e ORG_GRADLE_PROJECT_signingKeyId \
 		-e ORG_GRADLE_PROJECT_signingPassword \
 		-e ORG_GRADLE_PROJECT_signingKey \
-		-e CLOUDSDK_AUTH_ACCESS_TOKEN \
 		-v `cd .. && pwd`/:/home/libsignal/src $(DOCKER_EXTRA) \
 		$(DOCKER_IMAGE) \
 		sh -c "cd src/java; ./gradlew $(GRADLE_OPTIONS) publish $(CROSS_COMPILE_SERVER)"
