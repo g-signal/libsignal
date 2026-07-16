@@ -36,6 +36,8 @@ git diff <new-tag> HEAD -- \
 
 ### 规则：所有 prod/staging 域名替换，所有 prod IP 清空，所有 cert 改为 Native
 
+**其他注意**：`DOMAIN_CONFIG_SVRB_PROD.connect.proxy.configs` 保持 `[PROXY_CONFIG_F_STAGING, PROXY_CONFIG_G]`（上游是 `PROXY_CONFIG_F_PROD`，我们没有 prod proxy，所以用 staging proxy）
+
 **域名**（所有 `*.signal.org` 替换，上游升级时此规则不变）：
 
 | 常量 | 自定义值 |
@@ -51,13 +53,18 @@ git diff <new-tag> HEAD -- \
 | `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2.connect.hostname` | `grpc.ba-chat.com` |
 | `DOMAIN_CONFIG_EXPERIMENTAL_CHAT_H2_STAGING.connect.hostname` | `grpc.imba-test.com` |
 
-**IP 地址**（prod 的 3 个清空，staging 保持上游原值不动）：
+**IP 地址**（以下所有 IP 均为自定义值，上游升级时不能跟随）：
 
 | 常量 | ip_v4 | ip_v6 |
 |------|-------|-------|
 | `DOMAIN_CONFIG_CHAT` | `&[]` | `&[]` |
 | `DOMAIN_CONFIG_CDSI` | `&[]` | `&[]` |
 | `DOMAIN_CONFIG_SVR2` | `&[]` | `&[]` |
+| `DOMAIN_CONFIG_SVR2_STAGING` | `&[ip_addr!(v4, "20.253.229.239")]` | `&[]` |
+| `DOMAIN_CONFIG_SVRB_STAGING` | `&[ip_addr!(v4, "20.66.46.240")]` | `&[]` |
+| `DOMAIN_CONFIG_SVRB_PROD` | `&[ip_addr!(v4, "20.114.45.6")]` | `&[]` |
+
+> 注意：上游会在 SVRB/SVR2 staging/prod 添加更多 IP，合并时必须恢复为上表中的单 IP 值。
 
 **证书**（除 `SVRB_PROD` 外全部改为 Native）：
 
