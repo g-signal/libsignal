@@ -9,7 +9,9 @@
 use std::convert::Infallible;
 
 use libsignal_net::infra::errors::LogSafeDisplay;
+use ref_cast::RefCast as _;
 
+pub mod keys;
 pub mod keytrans;
 pub mod messages;
 pub mod profiles;
@@ -19,27 +21,25 @@ pub mod usernames;
 /// Marker wrapper for unauthenticated connections.
 ///
 /// You can get `&Unauth<Connection>` from `&Connection` using `Into`.
-#[derive(derive_more::Deref)]
+#[derive(derive_more::Deref, ref_cast::RefCast)]
 #[repr(transparent)]
 pub struct Unauth<T>(pub T);
 
 impl<'a, T> From<&'a T> for &'a Unauth<T> {
     fn from(value: &'a T) -> Self {
-        // SAFETY: We use repr(transparent) to ensure that T and Unauth<T> have the same
-        // representation. Therefore, every valid reference to a T is also a valid reference to an
-        // Unauth T. (The standard library does the same thing for std::array::from_ref.)
-        unsafe {
-            std::ptr::from_ref(value)
-                .cast::<Unauth<T>>()
-                .as_ref()
-                .expect("started with a reference")
-        }
+        Unauth::ref_cast(value)
     }
 }
 
 /// Marker wrapper for registration connections.
 #[derive(derive_more::Deref)]
 pub struct Registration<T>(pub T);
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum AllowRateLimitChallenges {
+    No,
+    Yes,
+}
 
 /// Authorization for requests on unauthenticated connections involving other users.
 ///
@@ -136,14 +136,16 @@ pub enum ChallengeOption {
 /// Any concrete type will only impl this trait in one way; anywhere that needs to use
 /// UnauthenticatedChatApi generically should accept an arbitrary `T` here.
 pub trait UnauthenticatedChatApi<T>:
-    keytrans::UnauthenticatedChatApi
+    keys::UnauthenticatedChatApi<T>
+    + keytrans::UnauthenticatedChatApi
     + messages::UnauthenticatedChatApi
     + profiles::UnauthenticatedChatApi
     + usernames::UnauthenticatedChatApi<T>
 {
 }
 impl<T, U> UnauthenticatedChatApi<T> for U where
-    U: keytrans::UnauthenticatedChatApi
+    U: keys::UnauthenticatedChatApi<T>
+        + keytrans::UnauthenticatedChatApi
         + messages::UnauthenticatedChatApi
         + profiles::UnauthenticatedChatApi
         + usernames::UnauthenticatedChatApi<T>

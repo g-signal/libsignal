@@ -1,5 +1,11 @@
-v0.86.14
+v0.87.5
 
-- TypeScript: Fix accidentally-lax typing for the non-deprecated overload of `Net.setRemoteConfig`.
-- Upgrade MSRV to 1.88
-- Backup validator: validate group member labels
+- SPQR: upgrade to v1.5.0.
+
+- iOS: 5xx responses to typed chat APIs are now treated as retryable `ioError`s rather than `networkProtocolError`s.
+
+- Log hashes of TLS certs on verification failure
+
+- Treat HTTP/2 transport errors disinct from gRPC status
+
+- backup: Support iOS specific settings in account data.

@@ -88,73 +88,34 @@ impl DeploymentMode {
 }
 
 pub type TreeRoot = [u8; 32];
-pub type LastTreeHead = (TreeHead, TreeRoot);
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct LastTreeHead(pub TreeHead, pub TreeRoot);
 
 impl StoredTreeHead {
     pub fn into_last_tree_head(self) -> Option<LastTreeHead> {
-        let StoredTreeHead { tree_head, root } = self;
-        Some((tree_head?, root.try_into().ok()?))
+        let StoredTreeHead {
+            tree_head,
+            root,
+            stored_at_ms: _,
+        } = self;
+        Some(LastTreeHead(tree_head?, root.try_into().ok()?))
     }
 }
 
-impl From<LastTreeHead> for StoredTreeHead {
-    fn from((tree_head, root): LastTreeHead) -> Self {
-        Self {
-            tree_head: Some(tree_head),
+impl LastTreeHead {
+    pub fn into_stored(self, stored_at: SystemTime) -> StoredTreeHead {
+        let stored_at_ms = stored_at
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("valid SystemTime")
+            .as_millis()
+            .try_into()
+            .expect("enough millis since UNIX_EPOCH");
+        let LastTreeHead(head, root) = self;
+        StoredTreeHead {
+            tree_head: Some(head),
             root: root.into(),
-        }
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct Versioned<T> {
-    pub item: T,
-    pub version: Option<u32>,
-}
-
-impl<T> From<T> for Versioned<T> {
-    fn from(item: T) -> Self {
-        Self {
-            item,
-            version: None,
-        }
-    }
-}
-
-impl<T> Versioned<T> {
-    pub fn new(item: T, version: u32) -> Self {
-        Self {
-            item,
-            version: Some(version),
-        }
-    }
-
-    pub fn as_ref(&self) -> Versioned<&T> {
-        Versioned {
-            item: &self.item,
-            version: self.version,
-        }
-    }
-
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Versioned<U> {
-        let Versioned { item, version } = self;
-        Versioned {
-            item: f(item),
-            version,
-        }
-    }
-
-    pub fn into_inner(self) -> T {
-        self.item
-    }
-}
-
-impl<T: Clone> Versioned<&T> {
-    pub fn cloned(self) -> Versioned<T> {
-        let Self { item, version } = self;
-        Versioned {
-            item: item.clone(),
-            version,
+            stored_at_ms,
         }
     }
 }
@@ -354,13 +315,14 @@ impl MonitoringData {
     }
 }
 
-impl From<MonitoringData> for StoredMonitoringData {
-    fn from(value: MonitoringData) -> Self {
-        Self {
-            index: value.index.into(),
-            pos: value.pos,
-            ptrs: value.ptrs,
-            owned: value.owned,
+impl MonitoringData {
+    fn into_stored(self, search_key: Vec<u8>) -> StoredMonitoringData {
+        StoredMonitoringData {
+            index: self.index.into(),
+            pos: self.pos,
+            ptrs: self.ptrs,
+            owned: self.owned,
+            search_key,
         }
     }
 }
@@ -409,19 +371,34 @@ impl TryFrom<StoredAccountData> for AccountData {
     }
 }
 
-impl From<AccountData> for StoredAccountData {
-    fn from(acc: AccountData) -> Self {
+impl AccountData {
+    pub fn into_stored(
+        self,
+        aci_search_key: Vec<u8>,
+        e164_search_key: Option<Vec<u8>>,
+        username_hash_search_key: Option<Vec<u8>>,
+        stored_at: SystemTime,
+    ) -> StoredAccountData {
         let AccountData {
             aci,
             e164,
             username_hash,
             last_tree_head,
-        } = acc;
-        Self {
-            aci: Some(aci.into()),
-            e164: e164.map(StoredMonitoringData::from),
-            username_hash: username_hash.map(StoredMonitoringData::from),
-            last_tree_head: Some(last_tree_head.into()),
+        } = self;
+        let aci = aci.into_stored(aci_search_key);
+        let e164 = e164
+            .zip(e164_search_key)
+            .map(|(data, key)| data.into_stored(key));
+        let username_hash = username_hash
+            .zip(username_hash_search_key)
+            .map(|(data, key)| data.into_stored(key));
+        let last_tree_head = last_tree_head.into_stored(stored_at);
+
+        StoredAccountData {
+            aci: Some(aci),
+            e164,
+            username_hash,
+            last_tree_head: Some(last_tree_head),
         }
     }
 }

@@ -66,7 +66,8 @@
       "pin_reminders": null,
       "app_theme": "System",
       "calls_use_less_data_setting": "MobileDataOnly",
-      "allow_sealed_sender_from_anyone": false
+      "allow_sealed_sender_from_anyone": false,
+      "allow_automatic_key_verification": false
     },
     "avatar_url_path": "",
     "donation_subscription": null,
@@ -82,8 +83,12 @@
       "screenshot_security": false,
       "navigation_bar_size": "Compact"
     },
+    "ios_specific_settings": {
+      "is_system_call_log_enabled": true
+    },
     "bio_text": "",
-    "bio_emoji": ""
+    "bio_emoji": "",
+    "key_transparency_data": null
   },
   "recipients": [],
   "chats": [],

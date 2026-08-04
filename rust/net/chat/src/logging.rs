@@ -3,10 +3,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 
-use libsignal_core::{Aci, Pni, ServiceId};
+use std::fmt::Formatter;
 
+use libsignal_core::{Aci, Pni, ServiceId};
+use ref_cast::RefCast as _;
+
+#[derive(ref_cast::RefCast)]
+#[repr(transparent)]
 pub struct Redact<T>(pub T);
-impl std::fmt::Display for Redact<&'_ uuid::Uuid> {
+impl std::fmt::Display for Redact<uuid::Uuid> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -22,24 +27,43 @@ impl std::fmt::Display for Redact<&'_ uuid::Uuid> {
     }
 }
 
-impl std::fmt::Display for Redact<&'_ Aci> {
+impl std::fmt::Display for Redact<Aci> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Redact(&uuid::Uuid::from(*self.0)).fmt(f)
+        Redact(uuid::Uuid::from(self.0)).fmt(f)
     }
 }
 
-impl std::fmt::Display for Redact<&'_ Pni> {
+impl std::fmt::Display for Redact<Pni> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "PNI:{}", Redact(&uuid::Uuid::from(*self.0)))
+        write!(f, "PNI:{}", Redact(uuid::Uuid::from(self.0)))
     }
 }
 
-impl std::fmt::Display for Redact<&'_ ServiceId> {
+impl std::fmt::Display for Redact<ServiceId> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
             ServiceId::Aci(specific_service_id) => Redact(specific_service_id).fmt(f),
             ServiceId::Pni(specific_service_id) => Redact(specific_service_id).fmt(f),
         }
+    }
+}
+
+impl<T> std::fmt::Display for Redact<&'_ T>
+where
+    Redact<T>: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Redact::<T>::ref_cast(self.0).fmt(f)
+    }
+}
+
+/// Implemented for use in DebugStruct etc, but still uses the Display impl.
+impl<T> std::fmt::Debug for Redact<T>
+where
+    Redact<T>: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{self}")
     }
 }
 

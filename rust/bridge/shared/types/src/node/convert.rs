@@ -24,7 +24,12 @@ use crate::message_backup::MessageBackupValidationOutcome;
 use crate::net::chat::{
     ChatListener, NodeChatListener, NodeProvisioningListener, ProvisioningListener,
 };
-use crate::support::{Array, AsType, FixedLengthBincodeSerializable, Serialized, extend_lifetime};
+use crate::protocol::storage::{
+    NodeBridgeKyberPreKeyStore, NodeBridgePreKeyStore, NodeBridgeSignedPreKeyStore,
+};
+use crate::support::{
+    Array, AsType, BridgedCallbacks, FixedLengthBincodeSerializable, Serialized, extend_lifetime,
+};
 
 /// Converts arguments from their JavaScript form to their Rust form.
 ///
@@ -186,6 +191,46 @@ where
     }
     fn load_async_arg(stored: &'a mut Self::StoredType) -> Self {
         stored.0.take().expect("should only be loaded once")
+    }
+}
+
+/// A variation of [`ArgTypeInfo`] for callback results.
+///
+/// All [`SimpleArgTypeInfo`] implementations are reusable for this, but the general [`ArgTypeInfo`]
+/// allows borrowing from the foreign value and a callback result can't do that.
+pub trait CallbackResultTypeInfo: Sized {
+    /// The JavaScript form of the argument (e.g. `JsNumber`).
+    type ResultType: neon::types::Value;
+    /// Converts the data in `foreign` to the Rust type.
+    fn convert_from_callback(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self>;
+}
+
+impl<T: SimpleArgTypeInfo> CallbackResultTypeInfo for T {
+    type ResultType = T::ArgType;
+
+    fn convert_from_callback(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self> {
+        Self::convert_from(cx, foreign)
+    }
+}
+
+impl<T: CallbackResultTypeInfo> CallbackResultTypeInfo for Option<T> {
+    type ResultType = JsValue;
+
+    fn convert_from_callback(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self> {
+        if foreign.downcast::<JsNull, _>(cx).is_ok() {
+            return Ok(None);
+        }
+        let non_optional_value = foreign.downcast_or_throw::<T::ResultType, _>(cx)?;
+        T::convert_from_callback(cx, non_optional_value).map(Some)
     }
 }
 
@@ -354,6 +399,39 @@ impl SimpleArgTypeInfo for libsignal_core::E164 {
     }
 }
 
+impl CallbackResultTypeInfo for PreKeyRecord {
+    type ResultType = DefaultJsBox<JsBoxContentsFor<PreKeyRecord>>;
+
+    fn convert_from_callback(
+        _cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self> {
+        Ok(foreign.as_inner().0.clone())
+    }
+}
+
+impl CallbackResultTypeInfo for SignedPreKeyRecord {
+    type ResultType = DefaultJsBox<JsBoxContentsFor<SignedPreKeyRecord>>;
+
+    fn convert_from_callback(
+        _cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self> {
+        Ok(foreign.as_inner().0.clone())
+    }
+}
+
+impl CallbackResultTypeInfo for KyberPreKeyRecord {
+    type ResultType = DefaultJsBox<JsBoxContentsFor<KyberPreKeyRecord>>;
+
+    fn convert_from_callback(
+        _cx: &mut FunctionContext,
+        foreign: Handle<Self::ResultType>,
+    ) -> NeonResult<Self> {
+        Ok(foreign.as_inner().0.clone())
+    }
+}
+
 impl SimpleArgTypeInfo for AccountEntropyPool {
     type ArgType = <String as SimpleArgTypeInfo>::ArgType;
     fn convert_from(cx: &mut FunctionContext, foreign: Handle<Self::ArgType>) -> NeonResult<Self> {
@@ -380,6 +458,17 @@ impl SimpleArgTypeInfo for libsignal_net_chat::api::messages::MultiRecipientSend
                 })?;
             Ok(Self::Group(token))
         }
+    }
+}
+
+// Used for callback results.
+impl SimpleArgTypeInfo for () {
+    type ArgType = JsUndefined;
+    fn convert_from(
+        _cx: &mut FunctionContext,
+        _foreign: Handle<Self::ArgType>,
+    ) -> NeonResult<Self> {
+        Ok(())
     }
 }
 
@@ -738,12 +827,58 @@ macro_rules! bridge_trait {
 }
 
 bridge_trait!(IdentityKeyStore);
-bridge_trait!(PreKeyStore);
+// bridge_trait!(PreKeyStore);
 bridge_trait!(SenderKeyStore);
 bridge_trait!(SessionStore);
-bridge_trait!(SignedPreKeyStore);
-bridge_trait!(KyberPreKeyStore);
+// bridge_trait!(SignedPreKeyStore);
+// bridge_trait!(KyberPreKeyStore);
 bridge_trait!(InputStream);
+
+impl<'a> AsyncArgTypeInfo<'a> for &'a mut dyn PreKeyStore {
+    type ArgType = JsObject;
+    type StoredType = BridgedCallbacks<NodeBridgePreKeyStore>;
+    fn save_async_arg(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ArgType>,
+    ) -> NeonResult<Self::StoredType> {
+        Ok(BridgedCallbacks(NodeBridgePreKeyStore::new(cx, foreign)?))
+    }
+    fn load_async_arg(stored: &'a mut Self::StoredType) -> Self {
+        stored
+    }
+}
+
+impl<'a> AsyncArgTypeInfo<'a> for &'a mut dyn SignedPreKeyStore {
+    type ArgType = JsObject;
+    type StoredType = BridgedCallbacks<NodeBridgeSignedPreKeyStore>;
+    fn save_async_arg(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ArgType>,
+    ) -> NeonResult<Self::StoredType> {
+        Ok(BridgedCallbacks(NodeBridgeSignedPreKeyStore::new(
+            cx, foreign,
+        )?))
+    }
+    fn load_async_arg(stored: &'a mut Self::StoredType) -> Self {
+        stored
+    }
+}
+
+impl<'a> AsyncArgTypeInfo<'a> for &'a mut dyn KyberPreKeyStore {
+    type ArgType = JsObject;
+    type StoredType = BridgedCallbacks<NodeBridgeKyberPreKeyStore>;
+    fn save_async_arg(
+        cx: &mut FunctionContext,
+        foreign: Handle<Self::ArgType>,
+    ) -> NeonResult<Self::StoredType> {
+        Ok(BridgedCallbacks(NodeBridgeKyberPreKeyStore::new(
+            cx, foreign,
+        )?))
+    }
+    fn load_async_arg(stored: &'a mut Self::StoredType) -> Self {
+        stored
+    }
+}
 
 impl SimpleArgTypeInfo for Box<dyn ChatListener> {
     type ArgType = JsObject;

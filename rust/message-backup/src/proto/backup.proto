@@ -134,6 +134,7 @@ message AccountData {
     AppTheme appTheme = 28;  // If unset, treat the same as "Unknown" case
     CallsUseLessDataSetting callsUseLessDataSetting = 29;  // If unset, treat the same as "Unknown" case
     bool allowSealedSenderFromAnyone = 30;
+    bool allowAutomaticKeyVerification = 31;
   }
 
   message SubscriberData {
@@ -166,6 +167,10 @@ message AccountData {
     NavigationBarSize navigationBarSize = 3; // If unset, treat the same as "Unknown" case
   }
 
+  message IOSSpecificSettings {
+    bool isSystemCallLogEnabled = 1;
+  }
+
   bytes profileKey = 1;
   optional string username = 2;
   UsernameLink usernameLink = 3;
@@ -180,6 +185,9 @@ message AccountData {
   AndroidSpecificSettings androidSpecificSettings = 12;
   string bioText = 13;
   string bioEmoji = 14;
+  // Opaque blob containing key transparency data for the account
+  optional bytes keyTransparencyData = 15;
+  IOSSpecificSettings iosSpecificSettings = 16;
 }
 
 message Recipient {
@@ -268,6 +276,8 @@ message Contact {
   string systemFamilyName = 19;
   string systemNickname = 20;
   optional AvatarColor avatarColor = 21;
+  // Opaque blob containing key transparency data for the contact
+  optional bytes keyTransparencyData = 22;
 }
 
 message Group {
@@ -404,7 +414,7 @@ message CallLink {
   string name = 3;
   Restrictions restrictions = 4;
   uint64 expirationMs = 5;
-  optional bytes epoch = 6; // May be absent/empty for older links
+  reserved /*epoch*/ 6;
 }
 
 message AdHocCall {
@@ -497,6 +507,7 @@ message ChatItem {
     ViewOnceMessage viewOnceMessage = 18;
     DirectStoryReplyMessage directStoryReplyMessage = 19; // group story reply messages are not backed up
     Poll poll = 20;
+    AdminDeletedMessage adminDeletedMessage = 22;
   }
 
   PinDetails pinDetails = 21; // only set if message is pinned
@@ -895,6 +906,10 @@ message Poll {
   repeated PollOption options = 3; // At least two
   bool hasEnded = 4;
   repeated Reaction reactions = 5;
+}
+
+message AdminDeletedMessage {
+  uint64 adminId = 1; // id of the admin that deleted the message
 }
 
 message ChatUpdateMessage {
