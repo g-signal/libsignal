@@ -739,6 +739,7 @@ pub const STAGING: Env<'static> = Env {
             None,
             None,
         ],
+        previous: [None, None, None],
     },
     keytrans_config: KEYTRANS_CONFIG_STAGING,
 };
