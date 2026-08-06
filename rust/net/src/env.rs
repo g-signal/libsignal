@@ -28,7 +28,7 @@ use nonzero_ext::nonzero;
 use rand::seq::SliceRandom;
 use rand::{Rng, rng};
 
-use crate::certs::{PROXY_G_ROOT_CERTIFICATES, SIGNAL_ROOT_CERTIFICATES};
+use crate::certs::PROXY_G_ROOT_CERTIFICATES;
 use crate::chat::RECOMMENDED_CHAT_WS_CONFIG;
 use crate::enclave::{Cdsi, EnclaveEndpoint, EndpointParams, MrEnclave, SvrSgx};
 
@@ -197,7 +197,7 @@ const DOMAIN_CONFIG_SVRB_PROD: DomainConfig = DomainConfig {
     connect: ConnectionConfig {
         hostname: "svrb.ba-chat.com",
         port: DEFAULT_HTTPS_PORT,
-        cert: SIGNAL_ROOT_CERTIFICATES,
+        cert: RootCertificates::Native,
         min_tls_version: Some(SslVersion::TLS1_3),
         http_version: Some(HttpVersion::Http1_1),
         confirmation_header_name: None,
