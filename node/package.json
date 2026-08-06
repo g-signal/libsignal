@@ -1,6 +1,6 @@
 {
   "name": "@gg-signal/libsignal-client",
-  "version": "0.87.5",
+  "version": "0.87.6",
   "repository": "github:signalapp/libsignal",
   "license": "AGPL-3.0-only",
   "type": "module",
