@@ -102,67 +102,11 @@ ext.setUpSigningKey = { signingExt ->
     def signingKey = findProperty("signingKey")
     def signingPassword = findProperty("signingPassword")
 
-    // 诊断日志
-    println "========== PGP Signing Configuration Diagnostics =========="
-    println "signingKeyId present: ${signingKeyId != null}"
-    println "signingKey present: ${signingKey != null}"
-    println "signingPassword present: ${signingPassword != null}"
-
-    if (signingKeyId) {
-        println "signingKeyId length: ${signingKeyId.length()}"
-        println "signingKeyId (trimmed): '${signingKeyId.trim()}'"
-    }
-
-    if (signingKey) {
-        def keyTrimmed = signingKey.trim()
-        println "signingKey length: ${signingKey.length()}"
-        println "signingKey length (trimmed): ${keyTrimmed.length()}"
-        println "signingKey starts with: '${keyTrimmed.take(50)}'"
-        println "signingKey ends with: '${keyTrimmed.reverse().take(50).reverse()}'"
-        println "signingKey has BEGIN marker: ${keyTrimmed.contains('BEGIN PGP PRIVATE KEY BLOCK')}"
-        println "signingKey has END marker: ${keyTrimmed.contains('END PGP PRIVATE KEY BLOCK')}"
-        println "signingKey line count: ${keyTrimmed.count('\n') + 1}"
-    }
-
-    if (signingPassword) {
-        println "signingPassword length: ${signingPassword.length()}"
-    }
-
     if (signingKeyId && signingKey && signingPassword) {
-        println "Attempting to configure PGP signing..."
-
-        // 尝试不同的 Key ID 格式
         def longKeyId = signingKeyId.trim()
         def shortKeyId = longKeyId.length() > 8 ? longKeyId.substring(longKeyId.length() - 8) : longKeyId
-
-        println "Long Key ID (16 chars): ${longKeyId}"
-        println "Short Key ID (8 chars): ${shortKeyId}"
-
-        // 默认使用短格式 ID（更兼容）
-        def keyIdToUse = shortKeyId
-
-        try {
-            signingExt.useInMemoryPgpKeys(keyIdToUse, signingKey.trim(), signingPassword.trim())
-            println "✓ PGP signing configured successfully with short Key ID: ${keyIdToUse}"
-        } catch (Exception e) {
-            println "✗ FAILED with short Key ID, trying long format..."
-            println "Error: ${e.message}"
-
-            try {
-                signingExt.useInMemoryPgpKeys(longKeyId, signingKey.trim(), signingPassword.trim())
-                println "✓ PGP signing configured successfully with long Key ID: ${longKeyId}"
-            } catch (Exception e2) {
-                println "✗ FAILED to configure PGP signing with both formats"
-                println "Error type: ${e2.class.name}"
-                println "Error message: ${e2.message}"
-                e2.printStackTrace()
-                throw e2
-            }
-        }
-    } else {
-        println "⚠ Skipping PGP signing configuration (missing credentials)"
+        signingExt.useInMemoryPgpKeys(shortKeyId, signingKey.trim(), signingPassword.trim())
     }
-    println "==========================================================="
 }
 
 nexusPublishing {
