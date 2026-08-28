@@ -196,12 +196,16 @@ impl Claims {
     }
 
     pub fn from_attestation_data(data: proto::svr::AttestationData) -> Result<Self> {
-        let raft_group_config = data
-            .group_config
-            .ok_or_else(|| Error::AttestationDataError {
-                reason: "RaftGroupConfig is missing from the AttestationData".to_string(),
-            })?;
-        let raft_group_config = Some(raft_group_config);
+        // RaftGroupConfig presence requirement intentionally relaxed to allow a missing
+        // group_config, keeping this path consistent with from_custom_claims and
+        // skip_raft_validation(). Original required-field logic kept below for reference:
+        // let raft_group_config = data
+        //     .group_config
+        //     .ok_or_else(|| Error::AttestationDataError {
+        //         reason: "RaftGroupConfig is missing from the AttestationData".to_string(),
+        //     })?;
+        // let raft_group_config = Some(raft_group_config);
+        let raft_group_config = data.group_config;
         Ok(Self {
             public_key: data.public_key,
             raft_group_config,

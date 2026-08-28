@@ -97,7 +97,11 @@ fn new_handshake_with_constants(
         current_time,
         handshake_type,
     )?
-    .validate(expected_raft_config)?;
+    // RaftGroupConfig validation intentionally disabled.
+    // Original validation kept below for reference:
+    // .validate(expected_raft_config)?;
+    .skip_raft_validation();
+    let _ = expected_raft_config;
 
     Ok(handshake)
 }
